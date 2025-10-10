@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <title>人狼ゲーム</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+    <?!= include('stylesheet'); ?>
+</head>
+<body>
+    <div id="loading" class="loading-overlay hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="container">
+        <div id="setup-phase" class="phase-section">
+            <h1><ruby>人狼<rt>じんろう</rt></ruby>ゲーム</h1>
+            <h2>ゲームの<ruby>設定<rt>せってい</rt></ruby></h2>
+            <div class="form-group">
+                <label for="player-count"><ruby>遊<rt>あそ</rt></ruby>ぶ<ruby>人数<rt>にんずう</rt></ruby>を<ruby>選<rt>えら</rt></ruby>んでね</label>
+                <select id="player-count">
+                    <option value="4">4人</option>
+                    <option value="5">5人</option>
+                    <option value="6">6人</option>
+                    <option value="7">7人</option>
+                    <option value="8">8人</option>
+                    <option value="9">9人</option>
+                    <option value="10">10人</option>
+                    <option value="11">11人</option>
+                    <option value="12">12人</option>
+                </select>
+            </div>
+            <div id="player-names-container"></div>
+            <button id="start-game-button" class="btn btn-primary">ゲーム<ruby>開始<rt>かいし</rt></ruby></button>
+        </div>
+
+        <div id="roleCheck-phase" class="phase-section hidden">
+            <div id="role-check-container"></div>
+        </div>
+
+        <div id="day-phase" class="phase-section hidden">
+            <h2 id="day-title"></h2>
+            <div class="message-box" id="day-message"></div>
+            <h3><ruby>生<rt>い</rt></ruby>きているプレイヤー</h3>
+            <ul id="alive-players-list" class="player-list"></ul>
+            
+            <div id="day-actions">
+                <div class="form-group">
+                    <label for="timer-select"><ruby>相談<rt>そうだん</rt></ruby>する<ruby>時間<rt>じかん</rt></ruby>を<ruby>決<rt>き</rt></ruby>めてね</label>
+                    <select id="timer-select">
+                        <option value="1">1分</option>
+                        <option value="3">3分</option>
+                        <option value="5" selected>5分</option>
+                        <option value="10">10分</option>
+                    </select>
+                </div>
+                <button id="start-timer-button" class="btn btn-secondary"><ruby>相談<rt>そうだん</rt></ruby>タイムスタート！</button>
+                <div id="timer-display" class="timer" style="display: none;"></div>
+                <button id="go-to-vote-button" class="btn btn-primary"><ruby>投票<rt>とうひょう</rt></ruby>へ<ruby>進<rt>すす</rt></ruby>む</button>
+            </div>
+            
+            <div id="day-end-action" class="hidden">
+                 <!-- この中身はJavaScriptによって動的に設定されます -->
+            </div>
+        </div>
+
+        <div id="vote-phase" class="phase-section hidden">
+            <h2 id="vote-title"><ruby>投票<rt>とうひょう</rt></ruby></h2>
+            <div class="message-box" id="vote-message"></div>
+            <p id="vote-instruction"></p>
+            <div id="vote-buttons-grid" class="vote-grid"></div>
+        </div>
+
+        <div id="voteResult-phase" class="phase-section hidden">
+            <h2><ruby>投票結果<rt>とうひょうけっか</rt></ruby></h2>
+            <ul id="vote-result-list" class="result-list"></ul>
+            <div class="message-box exiled-box" id="exiled-player-message"></div>
+            
+            <div id="vote-result-actions">
+                <!-- この中身はJavaScriptによって動的に設定されます -->
+            </div>
+        </div>
+
+        <div id="night-phase" class="phase-section hidden">
+            <div id="night-container"></div>
+        </div>
+
+        <div id="result-phase" class="phase-section hidden">
+            <h2>ゲーム<ruby>終了<rt>しゅうりょう</rt></ruby>！</h2>
+            <div class="message-box winner-box">
+                <h3 id="winner-announcement"></h3>
+            </div>
+            <h3><ruby>全員<rt>ぜんいん</rt></ruby>の<ruby>役職<rt>やくしょく</rt></ruby></h3>
+            <ul id="roles-list" class="result-list"></ul>
+            <button id="play-again-button" class="btn btn-primary">もう<ruby>一度<rt>いちど</rt></ruby><ruby>遊<rt>あそ</rt></ruby>ぶ</button>
+        </div>
+    </div>
+
+<script>
+// --- グローバル変数 ---
+let gameState = null; 
+let timerInterval = null; 
+const SCRIPT_URL = "<?= scriptUrl ?>";
+
+// --- イベントリスナー ---
+document.addEventListener('DOMContentLoaded', () => {
+    switchPhase('setup-phase');
+    setupSetupPhase();
+});
+
+// --- 汎用関数 ---
+function showLoading() { document.getElementById('loading').classList.remove('hidden'); }
+function hideLoading() { document.getElementById('loading').classList.add('hidden'); }
+function showError(error) {
+    hideLoading();
+    console.error('エラーが発生しました:', error);
+    alert('エラーがおきました。もういちどページをよみこんでください。');
+}
+function switchPhase(phaseId) {
+    document.querySelectorAll('.phase-section').forEach(section => {
+        section.classList.add('hidden');
+    });
+    document.getElementById(phaseId).classList.remove('hidden');
+}
+function getRoleWithRuby(role) {
+    const rubyMap = {
+        '村人': '<ruby>村人<rt>むらびと</rt></ruby>', '人狼': '<ruby>人狼<rt>じんろう</rt></ruby>',
+        '占い師': '<ruby>占い師<rt>うらないし</rt></ruby>', '霊能者': '<ruby>霊能者<rt>れいのうしゃ</rt></ruby>',
+        '狩人': '<ruby>狩人<rt>かりうど</rt></ruby>', '狂人': '<ruby>狂人<rt>きょうじん</rt></ruby>'
+    };
+    return rubyMap[role] || role;
+}
+
+function updateGameState(newState) {
+    hideLoading();
+    if (!newState) {
+        showError({ message: 'サーバーから無効なデータが返されました。' });
+        return;
+    }
+    gameState = newState;
+    console.log("New Game State Received:", gameState);
+    setupPhase(gameState.phase);
+}
+
+function setupPhase(phase) {
+    switch (phase) {
+        case 'roleCheck':  setupRoleCheckPhase(); break;
+        case 'day':        setupDayPhase(); break;
+        case 'vote':       setupVotePhase(); break;
+        case 'voteResult': setupVoteResultPhase(); break;
+        case 'night':      setupNightPhase(); break;
+        case 'result':     setupResultPhase(); break;
+        default:
+            console.error('不明なフェーズ:', phase);
+            switchPhase('setup-phase');
+    }
+}
+
+// --- 設定フェーズ (setup-phase) ---
+function setupSetupPhase() {
+    const playerCountSelect = document.getElementById('player-count');
+    const startGameButton = document.getElementById('start-game-button');
+    const renderNameInputs = (count) => {
+        const container = document.getElementById('player-names-container');
+        container.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+            // ★改善点: placeholderの漢字「例」をひらがなに変更
+            formGroup.innerHTML = '<label>プレイヤー ' + (i + 1) + ' のニックネーム</label><input type="text" placeholder="れい：たろう">';
+            container.appendChild(formGroup);
+        }
+    };
+    playerCountSelect.addEventListener('change', () => renderNameInputs(parseInt(playerCountSelect.value)));
+    startGameButton.addEventListener('click', () => {
+        const playerCount = parseInt(playerCountSelect.value);
+        const playerNames = Array.from(document.querySelectorAll('#player-names-container input')).map(input => input.value.trim());
+        if (playerNames.some(name => name === '')) {
+            alert('みんなのニックネームをいれてね！');
+            return;
+        }
+        showLoading();
+        google.script.run.withSuccessHandler(updateGameState).withFailureHandler(showError).startGame(playerCount, playerNames);
+    });
+    renderNameInputs(parseInt(playerCountSelect.value));
+}
+
+// --- 役職確認フェーズ (roleCheck-phase) ---
+function setupRoleCheckPhase() {
+    switchPhase('roleCheck-phase');
+    const container = document.getElementById('role-check-container');
+    const currentPlayer = gameState.players[gameState.currentTurnPlayerIndex];
+    let htmlContent = '<h2><ruby>役職<rt>やくしょく</rt></ruby>の<ruby>確認<rt>かくにん</rt></ruby></h2>'
+        + '<p class="message-box">'
+        + (gameState.currentTurnPlayerIndex + 1) + '<ruby>人目<rt>にんめ</rt></ruby>の <strong>' + currentPlayer.name + '</strong> さん、<br>'
+        + '<ruby>画面<rt>がめん</rt></ruby>を<ruby>見<rt>み</rt></ruby>てください。<small>（ほかの<ruby>人<rt>ひと</rt></ruby>は<ruby>見<rt>み</rt></ruby>ないでね！）</small>'
+        + '</p>'
+        + '<button id="show-role-button" class="btn btn-secondary">あなたの<ruby>役職<rt>やくしょく</rt></ruby>を<ruby>見<rt>み</rt></ruby>る</button>';
+    container.innerHTML = htmlContent;
+
+    document.getElementById('show-role-button').addEventListener('click', () => {
+        const role = currentPlayer.role;
+        const roleDetails = {
+            '村人':   { img: 'https://lh3.googleusercontent.com/d/1lD7q6OPKAXPTyC9AoM0l03W1jyFMtcaT', desc: '<ruby>特別<rt>とくべつ</rt></ruby>な<ruby>能力<rt>のうりょく</rt></ruby>はありません。だれが<ruby>人狼<rt>じんろう</rt></ruby>か、みんなと<ruby>相談<rt>そうだん</rt></ruby>して<ruby>見<rt>み</rt></ruby>つけだしてください。' },
+            '人狼':   { img: 'https://lh3.googleusercontent.com/d/1sqMo2fTEw_unJnTkQkHUZm1brLZjv7XX', desc: '<ruby>村人<rt>むらびと</rt></ruby>に<ruby>正体<rt>しょうたい</rt></ruby>がバレないように、<ruby>毎晩<rt>まいばん</rt></ruby>ひとりずつ<ruby>村人<rt>むらびと</rt></ruby>を<ruby>襲撃<rt>しゅうげき</rt></ruby>します。' },
+            '占い師': { img: 'https://lh3.googleusercontent.com/d/1IG14FjxHa9dCenLJzA77XQbcz4sF7QmA', desc: '<ruby>毎晩<rt>まいばん</rt></ruby>、だれか１<ruby>人<rt>り</rt></ruby>を<ruby>占<rt>うらな</rt></ruby>って、その人が「<ruby>人狼<rt>じんろう</rt></ruby>」かどうかを<ruby>知<rt>し</rt></ruby>ることができます。' },
+            '霊能者': { img: 'https://lh3.googleusercontent.com/d/1UgIDe-9lSAp3rg5LPSpdQueRuLvR3YTr', desc: '<ruby>昼<rt>ひる</rt></ruby>に<ruby>追放<rt>ついほう</rt></ruby>された<ruby>人<rt>ひと</rt></ruby>が、「<ruby>人狼<rt>じんろう</rt></ruby>」だったかどうかを<ruby>知<rt>し</rt></ruby>ることができます。' },
+            '狩人':   { img: 'https://lh3.googleusercontent.com/d/1fS93Qqk5yxWXPA3ZrCk-9WbwLMsjJvUR', desc: '<ruby>毎晩<rt>まいばん</rt></ruby>、だれか１<ruby>人<rt>り</rt></ruby>を<ruby>人狼<rt>じんろう</rt></ruby>の<ruby>襲撃<rt>しゅうげき</rt></ruby>から<ruby>守<rt>まも</rt></ruby>ることができます。' },
+            '狂人':   { img: 'https://lh3.googleusercontent.com/d/1WEn5lDaOFxN6ggY9jJ1uxQ-OMX9sRJrf', desc: '<ruby>人狼<rt>じんろう</rt></ruby>の<ruby>味方<rt>みかた</rt></ruby>です。<ruby>占<rt>うらな</rt></ruby>われても「<ruby>人狼<rt>じんろう</rt></ruby>ではない」と<ruby>出<rt>で</rt></ruby>ます。<ruby>人狼<rt>じんろう</rt></ruby>が<ruby>勝<rt>か</rt></ruby>つように、うそをついてまどわせましょう。' }
+        };
+        const details = roleDetails[role] || { img: 'https://placehold.co/200x200/EFEFEF/333333?text=？', desc: '説明はありません。' };
+        let additionalInfo = '';
+        if (role === '占い師' && gameState.seerFirstNightInfo && gameState.seerFirstNightInfo.seerId === currentPlayer.id) {
+            additionalInfo = '<p class="role-additional-info">あなたは、<strong>' + gameState.seerFirstNightInfo.whitePlayerName + '</strong>さんが<ruby>村人<rt>むらびと</rt></ruby>チームであることを<ruby>知<rt>し</rt></ruby>っています。</p>';
+        }
+        if (role === '人狼' && currentPlayer.werewolfAllies && currentPlayer.werewolfAllies.length > 0) {
+            const alliesText = currentPlayer.werewolfAllies.join('さん、');
+            additionalInfo += '<p class="role-additional-info">あなたの<ruby>仲間<rt>なかま</rt></ruby>の<ruby>人狼<rt>じんろう</rt></ruby>は、<strong>' + alliesText + '</strong>さんです。</p>';
+        }
+        let roleHtml = '<h2>' + currentPlayer.name + 'さんの<ruby>役職<rt>やくしょく</rt></ruby></h2>'
+            + '<div class="role-card">'
+            + '<img src="' + details.img + '" alt="' + role + 'のイラスト">'
+            + '<h3>あなたは「' + getRoleWithRuby(role) + '」です</h3>'
+            + '<p class="role-description">' + details.desc + '</p>'
+            + additionalInfo
+            + '</div>'
+            + '<p><ruby>確認<rt>かくにん</rt></ruby>したらボタンを<ruby>押<rt>お</rt></ruby>して、<ruby>次<rt>つぎ</rt></ruby>の<ruby>人<rt>ひと</rt></ruby>に<ruby>端末<rt>たんまつ</rt></ruby>を<ruby>渡<rt>わた</rt></ruby>してください。</p>'
+            + '<button id="confirm-role-button" class="btn btn-primary"><ruby>確認<rt>かくにん</rt></ruby>しました</button>';
+        container.innerHTML = roleHtml;
+        document.getElementById('confirm-role-button').addEventListener('click', () => {
+            showLoading();
+            google.script.run.withSuccessHandler(updateGameState).withFailureHandler(showError).nextRoleCheck();
+        });
+    });
+}
+
+// --- 昼フェーズ (day-phase) ---
+function setupDayPhase() {
+    switchPhase('day-phase');
+    document.getElementById('day-title').innerHTML = gameState.day + '<ruby>日目<rt>にちめ</rt></ruby>の<ruby>昼<rt>ひる</rt></ruby>';
+    document.getElementById('day-message').textContent = gameState.gameMessage;
+    const alivePlayersList = document.getElementById('alive-players-list');
+    alivePlayersList.innerHTML = '';
+    gameState.players.filter(p => p.isAlive).forEach(player => {
+        alivePlayersList.innerHTML += '<li>' + player.name + '</li>';
+    });
+
+    const dayActions = document.getElementById('day-actions');
+    const dayEndAction = document.getElementById('day-end-action');
+
+    if (gameState.winner) {
+        dayActions.classList.add('hidden');
+        dayEndAction.classList.remove('hidden');
+        dayEndAction.innerHTML = '<button id="go-to-final-result-button" class="btn btn-primary"><ruby>最終<rt>さいしゅう</rt></ruby><ruby>結果<rt>けっか</rt></ruby>を<ruby>見<rt>み</rt></ruby>る</button>';
+        document.getElementById('go-to-final-result-button').onclick = () => {
+            gameState.phase = 'result';
+            setupResultPhase();
+        };
+    } else {
+        dayActions.classList.remove('hidden');
+        dayEndAction.classList.add('hidden');
+        document.getElementById('timer-select').value = gameState.timerDuration;
+        document.getElementById('start-timer-button').style.display = 'inline-block';
+        document.getElementById('timer-select').style.display = 'block';
+        document.getElementById('timer-display').style.display = 'none';
+        document.getElementById('start-timer-button').onclick = () => {
+            const durationMinutes = parseInt(document.getElementById('timer-select').value);
+            startTimer(durationMinutes * 60);
+        };
+        document.getElementById('go-to-vote-button').onclick = () => {
+            clearInterval(timerInterval);
+            showLoading();
+            google.script.run.withSuccessHandler(updateGameState).withFailureHandler(showError).startVotePhase();
+        };
+    }
+}
+
+function startTimer(durationSeconds) {
+    document.getElementById('start-timer-button').style.display = 'none';
+    document.getElementById('timer-select').style.display = 'none';
+    const timerDisplay = document.getElementById('timer-display');
+    timerDisplay.style.display = 'block';
+    let timer = durationSeconds;
+    timerInterval = setInterval(() => {
+        const minutes = Math.floor(timer / 60);
+        const seconds = timer % 60;
+        timerDisplay.textContent = String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+        if (--timer < 0) {
+            clearInterval(timerInterval);
+            timerDisplay.textContent = "時間切れ！";
+            document.getElementById('go-to-vote-button').click();
+        }
+    }, 1000);
+}
+
+// --- 投票フェーズ (vote-phase) ---
+function setupVotePhase() {
+    switchPhase('vote-phase');
+    document.getElementById('vote-message').textContent = gameState.gameMessage;
+    document.getElementById('vote-title').innerHTML = gameState.tieBreakVote ? '<ruby>決選投票<rt>けっせんとうひょう</rt></ruby>' : '<ruby>投票<rt>とうひょう</rt></ruby>';
+    renderVoterTurn(gameState.currentVoterId);
+}
+function renderVoterTurn(voterId) {
+    const voter = gameState.players.find(p => p.id === voterId);
+    if (!voter) { return; }
+
+    document.getElementById('vote-instruction').innerHTML = '<strong>' + voter.name + '</strong>さんの<ruby>番<rt>ばん</rt></ruby>です。<br><ruby>追放<rt>ついほう</rt></ruby>したい<ruby>人<rt>ひと</rt></ruby>を<ruby>選<rt>えら</rt></ruby>んでください。';
+    const voteGrid = document.getElementById('vote-buttons-grid');
+    voteGrid.innerHTML = '';
+    const voteTargets = gameState.tieBreakVote
+        ? gameState.players.filter(p => gameState.voteCandidates.includes(p.id))
+        : gameState.players.filter(p => p.isAlive);
+
+    voteTargets.forEach(targetPlayer => {
+        if (targetPlayer.id === voterId) return;
+        const button = document.createElement('button');
+        button.className = 'btn vote-btn';
+        button.textContent = targetPlayer.name;
+        button.onclick = () => {
+            showLoading();
+            google.script.run.withSuccessHandler(updateGameState).withFailureHandler(showError).submitVoteAndGetNextTurn(voterId, targetPlayer.id);
+        };
+        voteGrid.appendChild(button);
+    });
+}
+function getPotentialVoters() {
+    const alivePlayers = gameState.players.filter(p => p.isAlive);
+    return gameState.tieBreakVote
+        ? alivePlayers.filter(p => !gameState.voteCandidates.includes(p.id))
+        : alivePlayers;
+}
+
+// --- 投票結果フェーズ ---
+function setupVoteResultPhase() {
+    switchPhase('voteResult-phase');
+    const voteResultList = document.getElementById('vote-result-list');
+    const exiledPlayerMessage = document.getElementById('exiled-player-message');
+    const actionsDiv = document.getElementById('vote-result-actions');
+    voteResultList.innerHTML = '';
+    actionsDiv.innerHTML = ''; 
+    if (gameState.voteResultData) {
+        gameState.voteResultData.forEach(result => {
+            const li = document.createElement('li');
+            li.innerHTML = '<span>' + result.name + '</span><span class="player-role">' + result.votes + ' 票</span>';
+            voteResultList.appendChild(li);
+        });
+    }
+    exiledPlayerMessage.textContent = gameState.gameMessage;
+
+    if (gameState.winner) {
+        // ★改善点: 「最終結果を見る」にルビを追加
+        actionsDiv.innerHTML = '<button id="go-to-final-result-button" class="btn btn-primary"><ruby>最終<rt>さいしゅう</rt></ruby><ruby>結果<rt>けっか</rt></ruby>を<ruby>見<rt>み</rt></ruby>る</button>';
+        document.getElementById('go-to-final-result-button').onclick = () => {
+            gameState.phase = 'result';
+            setupResultPhase();
+        };
+    } else {
+        actionsDiv.innerHTML = '<button id="go-to-night-button" class="btn btn-primary"><ruby>夜<rt>よる</rt></ruby>の<ruby>行動<rt>こうどう</rt></ruby>へ<ruby>進<rt>すす</rt></ruby>む</button>';
+        document.getElementById('go-to-night-button').onclick = () => {
+            showLoading();
+            google.script.run.withSuccessHandler(updateGameState).withFailureHandler(showError).acknowledgeVoteResultAndStartNight();
+        };
+    }
+}
+
+// --- 夜フェーズ (night-phase) ---
+function setupNightPhase() {
+    switchPhase('night-phase');
+    renderNightTurn();
+}
+function renderNightTurn() {
+    const container = document.getElementById('night-container');
+    const alivePlayersWithAction = gameState.players.filter(p => p.isAlive);
+    const turnIndex = gameState.currentTurnPlayerIndex;
+    if (turnIndex >= alivePlayersWithAction.length) {
+        showLoading();
+        google.script.run.withSuccessHandler(updateGameState).withFailureHandler(showError).processNightResults();
+        return;
+    }
+    const currentPlayer = alivePlayersWithAction[turnIndex];
+    container.innerHTML = '<h2><ruby>夜<rt>よる</rt></ruby>が<ruby>来<rt>き</rt></ruby>ました</h2>'
+        + '<p class="message-box"><strong>' + currentPlayer.name + '</strong> さんの<ruby>番<rt>ばん</rt></ruby>です。<br><ruby>画面<rt>がめん</rt></ruby>を<ruby>見<rt>み</rt></ruby>てください。<small>（ほかの<ruby>人<rt>ひと</rt></ruby>は<ruby>見<rt>み</rt></ruby>ないでね！）</small></p>'
+        + '<button id="show-action-button" class="btn btn-secondary"><ruby>夜<rt>よる</rt></ruby>の<ruby>行動<rt>こうどう</rt></ruby>をする</button>';
+    document.getElementById('show-action-button').onclick = () => renderActionScreen(currentPlayer);
+}
+function renderActionScreen(currentPlayer) {
+    const container = document.getElementById('night-container');
+    let html = '<h2>' + currentPlayer.name + 'さんの<ruby>行動<rt>こうどう</rt></ruby></h2>';
+    const { role, id } = currentPlayer;
+    const createPlayerButtons = (action, targetPlayers) => {
+        let buttonsHtml = '<div class="vote-grid">';
+        targetPlayers.forEach(player => {
+            buttonsHtml += '<button class="btn vote-btn night-action-btn" data-action="' + action + '" data-target-id="' + player.id + '">' + player.name + '</button>';
+        });
+        return buttonsHtml + '</div>';
+    };
+    switch (role) {
+        case '占い師':
+            html += '<p><ruby>占<rt>うらな</rt></ruby>いたい<ruby>人<rt>ひと</rt></ruby>を<ruby>一人<rt>ひとり</rt></ruby><ruby>選<rt>えら</rt></ruby>んでください。</p>' + createPlayerButtons('fortune-tell', gameState.players.filter(p => p.isAlive && p.id !== id));
+            break;
+        case '人狼':
+            if (gameState.werewolfChoiceId !== null) {
+                const choiceName = gameState.players.find(p => p.id === gameState.werewolfChoiceId).name;
+                html += '<p class="message-box"><ruby>仲間<rt>なかま</rt></ruby>は<strong>' + choiceName + '</strong>さんを<ruby>選<rt>えら</rt></ruby>んでいます。</p>';
+            }
+            html += '<p><ruby>襲撃<rt>しゅうげき</rt></ruby>する<ruby>人<rt>ひと</rt></ruby>を<ruby>一人<rt>ひとり</rt></ruby><ruby>選<rt>えら</rt></ruby>んでください。</p>' + createPlayerButtons('attack', gameState.players.filter(p => p.isAlive && p.role !== '人狼'));
+            break;
+        case '霊能者':
+            html += '<div id="shaman-result-box"><p><ruby>霊視<rt>れいし</rt></ruby>しています...</p></div>';
+            container.innerHTML = html;
+            google.script.run.withSuccessHandler(message => {
+                document.getElementById('shaman-result-box').innerHTML = '<div class="message-box"><p>' + message + '</p></div>'
+                    + '<button id="night-confirm-btn" class="btn btn-primary">OK</button>';
+                addNightActionListeners();
+            }).withFailureHandler(showError).getShamanResult();
+            return;
+        case '狩人':
+            const guardablePlayers = gameState.players.filter(p => p.isAlive && p.id !== id && p.id !== currentPlayer.lastGuardedId);
+            if(guardablePlayers.length > 0){
+                html += '<p><ruby>今夜<rt>こんや</rt></ruby>、<ruby>人狼<rt>じんろう</rt></ruby>から<ruby>守<rt>まも</rt></ruby>る<ruby>人<rt>ひと</rt></ruby>を<ruby>一人<rt>ひとり</rt></ruby><ruby>選<rt>えら</rt></ruby>んでください。</p>' + createPlayerButtons('guard', guardablePlayers);
+            } else {
+                html += '<p><ruby>守<rt>まも</rt></ruby>れる<ruby>人<rt>ひと</rt></ruby>がいません。</p><button id="night-confirm-btn" class="btn btn-primary">OK</button>';
+            }
+            break;
+        default:
+            html += '<p>あなたの<ruby>夜<rt>よる</rt></ruby>の<ruby>行動<rt>こうどう</rt></ruby>はありません。<br><ruby>朝<rt>あさ</rt></ruby>になるまでお<ruby>待<rt>ま</rt></ruby>ちください。</p><button id="night-confirm-btn" class="btn btn-primary">OK</button>';
+    }
+    container.innerHTML = html;
+    addNightActionListeners();
+}
+function addNightActionListeners() {
+    const nextTurn = () => {
+        showLoading();
+        google.script.run.withSuccessHandler(updateGameState).withFailureHandler(showError).nextNightTurn();
+    };
+    const confirmBtn = document.getElementById('night-confirm-btn');
+    if (confirmBtn) confirmBtn.onclick = nextTurn;
+    document.querySelectorAll('.night-action-btn').forEach(button => {
+        button.onclick = () => {
+            const { action, targetId } = button.dataset;
+            showLoading();
+            google.script.run.withSuccessHandler(result => {
+                hideLoading();
+                if (action === 'fortune-tell') {
+                    document.getElementById('night-container').innerHTML = '<h2><ruby>占い結果<rt>うらないけっか</rt></ruby></h2>'
+                       + '<div class="message-box"><p>' + result.message + '</p></div>'
+                       + '<button id="night-confirm-btn" class="btn btn-primary">OK</button>';
+                    document.getElementById('night-confirm-btn').onclick = nextTurn;
+                } else {
+                    nextTurn();
+                }
+            }).withFailureHandler(showError).performNightAction(action, parseInt(targetId));
+        };
+    });
+}
+
+// --- 結果フェーズ (result-phase) ---
+function setupResultPhase() {
+    switchPhase('result-phase');
+    document.getElementById('winner-announcement').innerHTML = gameState.winner + 'の<ruby>勝利<rt>しょうり</rt></ruby>！';
+    const rolesList = document.getElementById('roles-list');
+    rolesList.innerHTML = '';
+    gameState.players.forEach(player => {
+        rolesList.innerHTML += '<li><span>' + player.name + '</span><span class="player-role">' + getRoleWithRuby(player.role) + '</span></li>';
+    });
+    document.getElementById('play-again-button').onclick = () => {
+        window.top.location.href = SCRIPT_URL;
+    };
+}
+</script>
+</body>
+</html>
