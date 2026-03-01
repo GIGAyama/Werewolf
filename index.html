@@ -545,7 +545,7 @@ function Footer() {
   return (
     <footer className="text-center text-white/50 py-4 border-t border-white/10 bg-gray-900/80 backdrop-blur-md shrink-0 relative z-10">
       <small className="text-sm font-bold flex items-center justify-center gap-1 tracking-wider">
-        © 2026 <R t="人狼" r="じんろう"/>ゲーム 
+        © 2026 人狼ゲーム 
         <a href="https://note.com/cute_borage86" target="_blank" rel="noopener noreferrer" className="no-underline text-white/70 hover:text-white transition-colors ml-1">
           GIGA山
         </a>
@@ -634,6 +634,18 @@ export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(AudioManager.isMuted);
+
+  // favicon.png の設定処理
+  useEffect(() => {
+    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.type = 'image/png';
+    link.href = 'favicon.png';
+  }, []);
 
   const isDayTime = gameState && ['day', 'vote', 'voteResult'].includes(gameState.phase);
 
