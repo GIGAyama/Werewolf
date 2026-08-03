@@ -1,0 +1,40 @@
+{
+  "$comment": "GIGA Standard v4 の品質ゲートの設定。scripts/check-project.mjs が読む。検査を緩めたいときは、必ず理由を書いて exceptions に足すこと。",
+
+  "appType": "B",
+  "repoBase": "/Werewolf/",
+  "distDir": "dist",
+
+  "budgets": {
+    "$comment": "単位はバイト。校内Wi-Fiで40人が同時に開く前提の目標値。",
+    "initialJs": 307200,
+    "totalAssets": 1048576,
+    "maxFileBytes": 409600,
+    "maxFileLines": 5000,
+    "favicon": 30720,
+    "pwaIcon": 61440,
+    "image": 153600
+  },
+
+  "features": {
+    "$comment": "このアプリに該当する機能。false のものは検査しない。",
+    "canvas": false,
+    "print": true,
+    "presentationMode": true,
+    "studyLog": false,
+    "serverSide": false
+  },
+
+  "exceptions": [
+    {
+      "check": "npm-audit-clean",
+      "reason": "esbuild(<-vite) と sharp の4件が残っている。いずれもメジャー更新でしか解消できず、改修モードの規則で見送っている。どちらも開発時にしか動かず、配信物 dist/ には含まれない。詳細は AUDIT.md の B6。",
+      "reviewedAt": "2026-08-03"
+    },
+    {
+      "check": "viewport-scalable",
+      "reason": "user-scalable=no を意図的に残している。全画面が児童の操作対象で、タブレットを回して渡すあいだの誤ズームがそのままゲームの中断になるため（Part I §2-1 が児童画面に限って認めている指定）。",
+      "reviewedAt": "2026-08-03"
+    }
+  ]
+}
