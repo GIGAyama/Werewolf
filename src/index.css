@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&display=swap');
+/* フォントは自己ホスト。外部 CDN に出ないので、初回オフラインでも当たるし
+   CSP も張れる。中身は scripts/build-fonts.mjs が生成する（npm run fonts）。 */
+@import './fonts.css';
 
 @tailwind base;
 @tailwind components;
@@ -15,17 +17,74 @@ html {
   font-size: clamp(14px, 1.9vw + 6px, 20px);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* 暗い配色に固定したアプリなので、OS へもそう伝える。
+     これが無いと名前の入力欄などのネイティブ UI だけ白く浮く。 */
+  color-scheme: dark;
+}
+
+:root {
+  /* ノッチ・ホームバー・丸角のぶんの余白。個別に env() を書くと
+     未対応ブラウザで calc() ごと無効になるので、変数に落として使う。 */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
 }
 
 body {
-  font-family: 'M PLUS Rounded 1c', sans-serif;
+  /* 自己ホストのサブセットに無い文字（児童が入力した珍しい漢字など）は
+     ここから下の端末内蔵フォントへ落ちる。□（豆腐）にはならない。 */
+  font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP', 'Yu Gothic UI', system-ui, sans-serif;
   background-color: #050510;
   color: #fff;
   overflow: hidden;
+  line-height: 1.8; /* 児童向けは行間を広く。Tailwind の text-* 指定側が優先される */
   user-select: none;
   -webkit-user-select: none;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ==========================================================================
+   画面いっぱいの器。
+   100dvh はモバイルのアドレスバーぶんはみ出さない正しい値だが、
+   古い ChromeOS / iOS には無いので 100vh を1行上に残してフォールバックにする。
+   左右はノッチ側が欠けないようセーフエリアを足す。
+   ========================================================================== */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
+}
+
+/* 押せるもの全部の共通ルール。
+   - 44px: 低学年の指でも外さない下限（ルート 14px の端末でも絶対値で確保する）
+   - touch-action: ダブルタップズーム待ちの 300ms 遅延を消す */
+button,
+a,
+[role='button'],
+input {
+  touch-action: manipulation;
+}
+button,
+[role='button'] {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* スクロールする箱の中で引っぱり更新が暴発しないようにする */
+.scroll-area,
+.overflow-y-auto {
+  overscroll-behavior: contain;
+}
+
+/* キーボードだけで操作する人に、いまどこにいるかを必ず見せる */
+:focus-visible {
+  outline: 3px solid #fde047;
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 
 /* 背景の宇宙・魔法的アニメーション */
@@ -247,13 +306,18 @@ rt {
   color: rgba(255, 255, 255, 0.8);
   transform: translateY(-10%);
 }
+/* ルビの括弧は、ルビ対応ブラウザでは隠す。読み上げソフトが
+   「じんろう」を二重に読まないための保険なので、消してはいけない。 */
+rp {
+  display: none;
+}
 
 /* iOS のノッチ / ホームバーを避けるセーフエリア対応 */
 .safe-top {
-  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-top: max(1rem, var(--safe-t));
 }
 .safe-bottom {
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-bottom: max(1rem, var(--safe-b));
 }
 
 /* スクロールバーの非表示（スマホライク） */
@@ -262,7 +326,108 @@ rt {
   background: transparent;
 }
 
-/* アニメーションを控えめにする設定を尊重する */
+/* ==========================================================================
+   提示モード（電子黒板・一斉授業）
+   教室のうしろの席から読めるように、全体を一回り大きくする。
+   ※「役職の確認」「夜の行動」の画面では App 側で自動的に解除している。
+     大きくすると、となりの席からのぞけてしまいゲームが壊れるため。
+   ========================================================================== */
+.presentation {
+  font-size: 140%;
+}
+.presentation .btn-3d-base {
+  min-height: 64px;
+}
+/* 大画面では余白を活かして、主役（相談タイマー）をさらに大きく */
+@media (min-width: 1600px) {
+  .neon-timer,
+  .neon-timer-danger {
+    font-size: 1.25em;
+  }
+}
+
+/* ==========================================================================
+   ハイコントラストモード（Windows の「コントラスト テーマ」など）
+   背景色や box-shadow が OS に無効化されるため、3Dボタンの立体感が消える。
+   枠線を足して「押せるもの」だと分かるようにする。
+   ========================================================================== */
+@media (forced-colors: active) {
+  .btn-3d-base,
+  button,
+  [role='button'] {
+    border: 2px solid ButtonText;
+  }
+  .glass-panel {
+    border: 1px solid CanvasText;
+  }
+  .title-text,
+  .title-red {
+    -webkit-text-fill-color: CanvasText;
+    forced-color-adjust: none;
+    color: CanvasText;
+  }
+}
+
+/* ==========================================================================
+   印刷（「あそびかた」を紙で配れるように）
+   ゲーム画面そのものは印刷する場面が無いので、操作系は全部落として
+   本文だけを白地・黒字で出す。
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #fff !important;
+    color: #000 !important;
+    overflow: visible !important;
+    font-size: 10.5pt;
+    line-height: 1.6;
+  }
+  .app-shell {
+    height: auto !important;
+  }
+  .no-print,
+  header,
+  footer,
+  .btn-3d-base,
+  .bg-night,
+  .bg-day,
+  .stars-overlay,
+  .clouds-overlay {
+    display: none !important;
+  }
+  .glass-panel {
+    background: #fff !important;
+    box-shadow: none !important;
+    border: 1px solid #000 !important;
+    backdrop-filter: none !important;
+  }
+  .title-text,
+  .title-red {
+    -webkit-text-fill-color: #000 !important;
+    color: #000 !important;
+  }
+  rt {
+    color: #444 !important;
+  }
+  li,
+  .card {
+    break-inside: avoid; /* 行が2ページに割れない */
+  }
+  a[href]::after {
+    content: ''; /* URL を併記しない */
+  }
+}
+
+/* ==========================================================================
+   動きの配慮
+   OS の「視差効果を減らす」設定と、アプリ内の「うごきをへらす」トグルの
+   どちらでも止まるようにする（感覚過敏の児童は OS 設定を知らないことが多い）。
+   ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -270,5 +435,24 @@ rt {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+/* 背景のグラデーションは animation を止めても位置が中途半端に残るので、
+   落ち着いた状態に固定してしまう。 */
+.reduce-motion .bg-night,
+.reduce-motion .bg-day {
+  background-size: 100% 100%;
+}
+.reduce-motion .stars-overlay {
+  opacity: 0.35;
 }
