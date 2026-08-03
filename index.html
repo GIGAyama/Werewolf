@@ -2,25 +2,41 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="./favicon.png" />
-    <!-- viewport-fit=cover: iPhone のノッチ/ホームバー領域まで背景を広げる -->
+
+    <!-- ① インストールの合図を「いちばん先に」受け取る。
+         Chrome は条件が揃うと即座に beforeinstallprompt を出すため、
+         React や CSS の読み込みより後だと合図を取りこぼし、通信が遅い端末で
+         「インストール」ボタンが出なくなる。<head> の先頭・同期スクリプト。 -->
+    <script src="./pwa-install-hook.js"></script>
+
+    <!-- viewport-fit=cover: iPhone のノッチ/ホームバー領域まで背景を広げる。
+         user-scalable=no は、児童が操作する画面に限って許可されている指定。
+         このアプリは全画面が児童の操作対象で、タブレットを回して渡すあいだの
+         誤ズームがそのままゲームの中断になるため、意図して残している。 -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="description" content="小学生・タブレット向けの、1台の端末でみんなで遊べる人狼ゲーム。ふりがな・音声ガイド付き。" />
+    <meta
+      name="description"
+      content="小学生・タブレット向けの、1台の端末でみんなで遊べる人狼ゲーム。ふりがな・音声ガイド付き。"
+    />
 
-    <!-- PWA / モバイル最適化 -->
+    <!-- PWA / モバイル最適化
+         （<link rel="manifest"> と CSP は vite.config.ts のビルド時に差し込まれる） -->
     <meta name="theme-color" content="#050510" />
+    <!-- 暗い配色に固定したアプリなので、OS にもそう伝える -->
+    <meta name="color-scheme" content="dark" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="人狼ゲーム" />
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 
-    <!-- フォントの事前接続でロードを高速化 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="./pwa-512x512.png" />
+    <!-- iOS は maskable に対応しないので、余白を焼き込んだ専用画像を渡す -->
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 
     <title>人狼ゲーム</title>
   </head>

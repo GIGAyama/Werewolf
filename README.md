@@ -54,6 +54,9 @@
 
 6.  **勝敗**: 人狼を全滅させるか、人狼の数が人間陣営と同数以上になるまでゲームを繰り返します。
 
+> 先生向けの使い方は **[MANUAL.md](./MANUAL.md)** にあります（専門用語なし）。
+> 現状の品質監査の結果は **[AUDIT.md](./AUDIT.md)** にあります。
+
 ## 🛠️ 技術スタック
 
 *   **フレームワーク**: React 18 + TypeScript
@@ -66,7 +69,31 @@
 
 *   **アイコン**: Lucide React
 
+*   **フォント**: M PLUS Rounded 1c（**自己ホスト・サブセット化**。外部CDNへは通信しません）
+
 *   **音声・音響**: Web Speech API (読み上げ), Web Audio API (SE生成)
+
+## 📁 構成
+
+```
+index.html                  <head> の最初で beforeinstallprompt を捕捉する
+assets/icon-master.png      アイコンの元画像（無圧縮。Vite の対象外＝dist に入らない）
+public/
+  fonts/*.woff2             自己ホストのサブセットフォント（npm run fonts で生成）
+  pwa-*.png favicon.png     配信用アイコン（npm run icons で生成）
+  offline.html              圏外のときの案内。JS を一切使わない
+  pwa-install-hook.js       インストールの合図を最速で受け取る
+src/
+  App.tsx                   画面とゲーム進行
+  index.css                 表示の土台（fluid type・セーフエリア・印刷・提示モード）
+  fonts.css                 自動生成。直接編集しない
+  pwa.ts                    インストール導線と更新通知
+  settings.ts               音・うごきの設定（localStorage）
+scripts/
+  build-fonts.mjs           フォントのサブセット取得
+  generate-icons.mjs        アイコン生成＋容量の上限チェック
+  check-project.mjs         品質ゲート（npm run check）
+```
 
 ## 🚀 開発・ビルド
 
@@ -84,9 +111,30 @@ npm run build
 
 # ビルド結果のプレビュー
 npm run preview
+
+# テスト（ゲームロジック）
+npm test
+
+# 品質ゲート（GIGA Standard v4 の必須項目を機械的に検査）
+npm run check
 ```
 
-> `favicon.png`（`public/` 内）を差し替えたあとに `npm run icons` を実行すると、PWA用の各種アイコンを再生成できます。
+### アイコンとフォントを作り直す
+
+```bash
+# assets/icon-master.png を差し替えたあとに実行する。
+# public/ の各アイコンを作り直し、容量の上限を超えたら失敗する。
+npm run icons
+
+# 画面に出す文字を増やした（新しい漢字を使った）ときに実行する。
+# ソースから文字を拾い直してサブセットを取り直す。
+npm run fonts
+```
+
+> **フォントを作り直したら、必ず実機で「豆腐（□）」が出ていないか確認してください。**
+> サブセットには「アプリが出す文字＋かな全部＋英数記号（半角/全角）＋小学1〜2年の漢字」が
+> 入っています。範囲外の文字は `unicode-range` の働きで端末内蔵フォントへ落ちるため、
+> 書体が変わるだけで文字自体は必ず出ますが、見た目の確認はしておくのが安全です。
 
 ## 🌐 公開・デプロイ
 
@@ -96,14 +144,100 @@ npm run preview
 
 アセットは相対パス（`base: './'`）で出力されるため、プロジェクトページ（`https://<ユーザー名>.github.io/<リポジトリ名>/`）でもカスタムドメインでも、そのまま動作します。
 
-### 📲 アプリとしてインストールする
+## 📲 PWA
 
-公開後、対応ブラウザでサイトを開くと「アプリをインストール」できます。
+### manifest の識別子は絶対パスで固定してある
 
-*   **Chrome (Android / PC)**: アドレスバーのインストールアイコン、またはメニュー →「アプリをインストール」
+```
+id:        /Werewolf/
+scope:     /Werewolf/
+start_url: /Werewolf/?source=pwa
+```
 
-*   **Safari (iOS/iPadOS)**: 共有ボタン →「ホーム画面に追加」
+`gigayama.github.io` は数十個のアプリが**同一オリジンを共有**しています。
+`id` を省略すると解決後の `start_url` が代替の識別子になり、URL を少し直しただけで
+別アプリ扱いになったり、似た構成の別アプリと取り違えられて
+「開いたら違うアプリが立ち上がる」事故が起きます。
+
+この3つは `vite.config.ts` の `REPO_BASE` に集約してあります。
+**このリポジトリをコピーして新しいアプリを作るときは、まずここを書き換えてください。**
+
+> ⚠️ アセット自体は相対パス（`base: './'`）で出力されるのでどこに置いても動きますが、
+> 上の3つは絶対パスです。**カスタムドメインへ移すときは `REPO_BASE` の変更が必要**です。
+> なお `id` を変えると、すでにインストール済みの端末では「別のアプリ」として扱われます。
+
+### キャッシュはアプリ専用の名前空間に閉じている
+
+Workbox の `cacheId: 'werewolf'` により、キャッシュ名は `werewolf-precache-v2-...` になります。
+同一オリジンに同居する他アプリのキャッシュには触れません。
+Service Worker は `localStorage` を一切操作しません。
+
+### 更新は「黙って差し替える」のではなく通知する
+
+`registerType: 'prompt'` を使い、新しい版が待機したらアプリ内に
+「あたらしい バージョンが あります」の帯を出します。授業のとちゅうで表示が
+変わると児童が混乱するため、押されたときだけ切り替えます。
+
+リリースのたびに `package.json` の `version` を上げてください。
+
+### インストール手順
+
+*   **Chrome (Android / Chromebook / PC)**: アプリ内の ⬇ ボタン、
+    またはアドレスバーのインストールアイコン
+*   **Safari (iOS / iPadOS)**: 共有ボタン →「ホーム画面に追加」
+    （`beforeinstallprompt` が存在しないため、アプリ内で手順を案内しています）
+
+## 🔐 セキュリティ設計
+
+**このアプリはサーバーを持ちません。個人情報が端末の外に出る経路がありません。**
+
+| 項目 | 状態 |
+|---|---|
+| 外部への通信 | **なし。** フォントを自己ホストにしたので、外部オリジンへのリクエストは 0 件 |
+| CSP | ビルド時に `index.html` へ注入。全ディレクティブが `'self'` または `'none'`。ワイルドカードなし |
+| プレイヤー名の扱い | React の state のみ。`localStorage` にも保存せず、リロードで消える |
+| `localStorage` に置くもの | `werewolf.settings.v1`（音・うごきの設定）だけ。**アプリ名の接頭辞つき** |
+| `localStorage.clear()` | 使用しない（同一オリジンの他アプリの記録まで消えるため） |
+| 秘密情報 | APIキー・スプレッドシートID・メールアドレスの直書きなし |
+| `postMessage` | 未使用 |
+| 学習ログ（study.v1） | 該当なし。成績・正誤を記録しないアプリのため |
+
+CSP の内容（`vite.config.ts` の `CSP` 定数）:
+
+```
+default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self';
+img-src 'self' data:; manifest-src 'self'; connect-src 'self';
+worker-src 'self'; base-uri 'none'; form-action 'none'
+```
+
+CSP は**ビルド成果物にだけ**注入しています。開発サーバーは CSS を `<style>` タグで
+注入するため、`index.html` に直書きすると開発中だけ画面が真っ白になるからです。
+
+## ⚠️ 制限とクォータ
+
+| 制限 | 内容 | 対処 |
+|---|---|---|
+| ゲームの進行は保存されない | 途中でタブを閉じると最初から | 意図した仕様（誰がどの役職かを端末に残さない）。MANUAL.md に明記済み |
+| Chromebook のメモリ | 4GB 機ではタブが自動破棄されることがある | 遊んでいる間は他のタブを開かない（MANUAL.md に記載） |
+| iOS の ITP | 7日間使わないと `localStorage` が消される | 消えるのは音・うごきの設定だけ。ホーム画面への追加を推奨 |
+| 読み上げ (Web Speech API) | 端末に日本語の音声が入っていないと読み上げられない | 進行に支障はない。画面の文字だけで完結する |
+| 音 (Web Audio API) | iOS は最初のタップまで音が鳴らない | ブラウザの仕様。ボタンを押した時点で解除される |
+| 配信量 | 初回 JS 205KB / 総アセット 560KB | GIGA Standard の目標（300KB / 1MB）内 |
+| フォントのサブセット | 収録外の漢字は端末内蔵フォントで表示される | `unicode-range` により豆腐（□）にはならない |
+
+### 依存パッケージの既知の脆弱性（意図して未対応）
+
+`npm audit` に 4件（`esbuild`←`vite`、`sharp`）残っていますが、**いずれもメジャー更新でしか
+解消できず、また開発時にしか動かない依存**です。配信物 `dist/` には含まれません。
+
+- `esbuild` … `npm run dev` の開発サーバーにのみ影響
+- `sharp` … `npm run icons`（ローカルの自作画像のみを処理）にのみ影響
+
+「動いているものを壊さない」ことを優先し、メジャー更新は見送っています。
+詳細は [AUDIT.md](./AUDIT.md) の B6 を参照してください。
 
 ## 📄 ライセンス
 
-© 2026 人狼ゲーム [GIGA山](https://note.com/cute_borage86 "null")
+MIT License — [LICENSE](./LICENSE) を参照してください。
+
+© 2026 人狼ゲーム [GIGA山](https://note.com/cute_borage86)

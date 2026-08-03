@@ -28,7 +28,26 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+
+      # 脆弱性は「報告するが止めない」。残っている4件はメジャー更新でしか
+      # 解消できず、いずれも開発時にしか動かない依存のため（README 参照）。
+      # 止めてしまうと、直せない理由で公開ができなくなる。
+      - name: npm audit（報告のみ）
+        run: npm audit --audit-level=critical || true
+
+      - name: 型チェック
+        run: npm run typecheck
+
+      - name: テスト
+        run: npm test
+
       - run: npm run build
+
+      # 品質ゲートは dist/ を見るのでビルドの後に走らせる。
+      # ここが落ちたら公開しない（GIGA Standard v4 の必須項目に穴がある状態）。
+      - name: 品質ゲート
+        run: npm run check
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist

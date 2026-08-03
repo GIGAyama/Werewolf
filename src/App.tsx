@@ -1,8 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   User, Skull, Eye, Search, Shield, VenetianMask, Play, RotateCcw,
   Moon, Sun, Vote, Users, MessageCircle, X, Sparkles, Volume2, VolumeX,
+  Download, Maximize2, Minimize2, Zap, ZapOff, RefreshCw, Share,
 } from 'lucide-react';
+import { useSettings } from './settings';
+import { useInstallPrompt, useServiceWorkerUpdate } from './pwa';
+// ゲームの中核ロジックは、テストできるように src/game.ts へ切り出してある
+import {
+  ROLE_CONFIGS, createInitialState, checkForWinner,
+  type Role, type Player, type GameState,
+} from './game';
 
 // ==========================================
 // 1. 音声・SEマネージャー
@@ -93,138 +101,18 @@ class AudioManager {
 }
 
 // ==========================================
-// 2. 型定義・ゲームロジック
-// ==========================================
-
-type Role = '村人' | '人狼' | '占い師' | '霊能者' | '狩人' | '狂人';
-type Phase = 'setup' | 'roleCheck' | 'day' | 'vote' | 'voteResult' | 'night' | 'result';
-
-interface Player {
-  id: number;
-  name: string;
-  role: Role;
-  isAlive: boolean;
-  votedBy: number[];
-  voteTo: number | null;
-  lastGuardedId: number | null;
-  werewolfAllies?: string[];
-}
-
-interface GameState {
-  players: Player[];
-  playerCount: number;
-  day: number;
-  phase: Phase;
-  currentTurnPlayerIndex: number;
-  currentVoterId: number | null;
-  exiledPlayerId: number | null;
-  attackedPlayerId: number | null;
-  guardedPlayerId: number | null;
-  werewolfChoiceId: number | null;
-  gameMessage: React.ReactNode;
-  tieBreakVote: boolean;
-  voteCandidates: number[];
-  voteResultData: { name: string; votes: number }[] | null;
-  seerFirstNightInfo: { seerId: number; whitePlayerName: string } | null;
-  winner: '村人陣営' | '人狼陣営' | null;
-  nightActionResult?: React.ReactNode | null;
-}
-
-// 村人陣営（＝人狼に襲撃・追放されうる「人間側」）の役職。
-// 狂人は人狼陣営として勝敗を共にするが、占いは白・人数は人間として数える。
-const VILLAGER_TEAM_ROLES: Role[] = ['村人', '占い師', '霊能者', '狩人'];
-
-const ROLE_CONFIGS: Record<number, Role[]> = {
-  4: ['村人', '村人', '人狼', '占い師'],
-  5: ['村人', '村人', '村人', '人狼', '占い師'],
-  6: ['村人', '村人', '村人', '人狼', '人狼', '占い師'],
-  7: ['村人', '村人', '村人', '村人', '人狼', '人狼', '占い師'],
-  8: ['村人', '村人', '村人', '村人', '村人', '人狼', '人狼', '占い師'],
-  9: ['村人', '村人', '村人', '村人', '村人', '人狼', '人狼', '占い師', '霊能者'],
-  10: ['村人', '村人', '村人', '村人', '村人', '人狼', '人狼', '占い師', '霊能者', '狂人'],
-  11: ['村人', '村人', '村人', '村人', '村人', '人狼', '人狼', '占い師', '霊能者', '狂人', '狩人'],
-  12: ['村人', '村人', '村人', '村人', '村人', '村人', '人狼', '人狼', '占い師', '霊能者', '狂人', '狩人'],
-};
-
-function shuffleArray<T>(array: T[]): T[] {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
-  return newArray;
-}
-
-function createInitialState(playerCount: number, playerNames: string[], roles: Role[]): GameState {
-  const shuffledRoles = shuffleArray(roles);
-
-  const players: Player[] = playerNames.map((name, index) => ({
-    id: index,
-    name: name || `プレイヤー${index + 1}`,
-    role: shuffledRoles[index],
-    isAlive: true,
-    votedBy: [],
-    voteTo: null,
-    lastGuardedId: null,
-  }));
-
-  const werewolfNames = players.filter((p) => p.role === '人狼').map((p) => p.name);
-  players.forEach((p) => {
-    if (p.role === '人狼') {
-      p.werewolfAllies = werewolfNames.filter((name) => name !== p.name);
-    }
-  });
-
-  let seerFirstNightInfo: GameState['seerFirstNightInfo'] = null;
-  const seer = players.find((p) => p.role === '占い師');
-  if (seer) {
-    const whitePlayers = players.filter((p) => p.id !== seer.id && VILLAGER_TEAM_ROLES.includes(p.role));
-    if (whitePlayers.length > 0) {
-      const randomWhitePlayer = whitePlayers[Math.floor(Math.random() * whitePlayers.length)];
-      seerFirstNightInfo = { seerId: seer.id, whitePlayerName: randomWhitePlayer.name };
-    }
-  }
-
-  return {
-    players,
-    playerCount,
-    day: 1,
-    phase: 'roleCheck',
-    currentTurnPlayerIndex: 0,
-    currentVoterId: null,
-    exiledPlayerId: null,
-    attackedPlayerId: null,
-    guardedPlayerId: null,
-    werewolfChoiceId: null,
-    gameMessage: '',
-    tieBreakVote: false,
-    voteCandidates: [],
-    voteResultData: null,
-    seerFirstNightInfo,
-    winner: null,
-    nightActionResult: null,
-  };
-}
-
-function checkForWinner(state: GameState): '村人陣営' | '人狼陣営' | null {
-  const alivePlayers = state.players.filter((p) => p.isAlive);
-  const aliveWerewolves = alivePlayers.filter((p) => p.role === '人狼');
-  // 人狼以外は「人間の体」として数える（狂人も含む）。人狼が人間の数以上になったら人狼勝利。
-  const aliveHumans = alivePlayers.filter((p) => p.role !== '人狼');
-
-  if (aliveWerewolves.length === 0) return '村人陣営';
-  if (aliveWerewolves.length >= aliveHumans.length) return '人狼陣営';
-  return null;
-}
-
-// ==========================================
 // 3. UI部品（ルビ振り、ボタンなど）
 // ==========================================
 
+// ふりがな。<rp> は、ルビに対応していない環境で「漢字(かんじ)」と括弧付きで
+// 出すための代替であると同時に、読み上げソフトが本文とルビを続けて
+// 「じんろうじんろう」と二重に読むのを防ぐ目印にもなる。CSS で隠している。
 const R = ({ t, r }: { t: string; r: string }) => (
   <ruby>
     {t}
+    <rp>(</rp>
     <rt>{r}</rt>
+    <rp>)</rp>
   </ruby>
 );
 
@@ -290,22 +178,66 @@ function Button({ children, onClick, className = '', icon, variant = 'primary', 
     onClick();
   };
   return (
-    <button onClick={handleClick} disabled={disabled} className={`btn-3d-base py-5 px-8 text-2xl w-full shrink-0 ${variants[variant]} ${className}`}>
-      {icon && <span className="scale-125 drop-shadow-md">{icon}</span>}
+    // px-3 → sm:px-8: 320px 幅の端末では、3列に並べたボタンの左右余白が
+    // 大きすぎて中身がセルからはみ出していた（body が overflow:hidden なので
+    // スクロールもできず文字が欠ける）。狭い画面では余白を詰める。
+    <button onClick={handleClick} disabled={disabled} className={`btn-3d-base py-4 px-3 sm:py-5 sm:px-8 text-2xl w-full min-w-0 shrink-0 ${variants[variant]} ${className}`}>
+      {icon && <span className="scale-125 drop-shadow-md shrink-0">{icon}</span>}
       <span>{children}</span>
     </button>
   );
 }
 
-// --- ヘッダー / フッター ---
-function Header({ onOpenModal, isDayTime, isMuted, toggleMute }: { onOpenModal: () => void; isDayTime?: boolean | null; isMuted: boolean; toggleMute: () => void }) {
+/** ヘッダーの丸いアイコンボタン（44px 以上を絶対値で確保する） */
+function IconButton({ onClick, label, active = false, children }: { onClick: () => void; label: string; active?: boolean; children: React.ReactNode }) {
   return (
-    <header className="safe-top flex justify-between items-center px-5 py-4 bg-gray-900/80 backdrop-blur-md border-b border-white/10 shrink-0 shadow-lg relative z-10">
-      <div className="flex items-center gap-4">
-        <button onClick={() => { AudioManager.init(); toggleMute(); AudioManager.playSE('click'); }} className="w-12 h-12 flex items-center justify-center bg-white/10 border border-white/20 rounded-full text-white hover:bg-white/20 transition-colors shadow-inner" aria-label="音声ON/OFF">
-          {isMuted ? <VolumeX className="w-6 h-6 text-gray-400" /> : <Volume2 className="w-6 h-6 text-blue-300" />}
-        </button>
-        <h1 className="text-3xl font-bold text-white tracking-wider flex items-center gap-2 drop-shadow-md hidden sm:flex">
+    <button
+      onClick={() => { AudioManager.init(); AudioManager.playSE('click'); onClick(); }}
+      aria-label={label}
+      aria-pressed={active}
+      // min-w/h を rem ではなく px で指定するのは、ルート 14px の 320px 端末でも
+      // 低学年の指の下限 44px を必ず満たすため（w-12 = 3rem だと 42px になる）。
+      className={`flex justify-center items-center min-w-[44px] min-h-[44px] w-11 h-11 rounded-full border transition-colors shadow-inner shrink-0 ${
+        active
+          ? 'bg-yellow-400 border-yellow-200 text-yellow-950'
+          : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// --- ヘッダー / フッター ---
+interface HeaderProps {
+  onOpenModal: () => void;
+  isDayTime?: boolean | null;
+  isMuted: boolean;
+  toggleMute: () => void;
+  reduceMotion: boolean;
+  toggleReduceMotion: () => void;
+  /** 提示モードを出してよい画面か（役職確認・夜の行動では出さない） */
+  canPresent: boolean;
+  presentation: boolean;
+  togglePresentation: () => void;
+  canInstall: boolean;
+  onInstall: () => void;
+}
+
+function Header({
+  onOpenModal, isDayTime, isMuted, toggleMute, reduceMotion, toggleReduceMotion,
+  canPresent, presentation, togglePresentation, canInstall, onInstall,
+}: HeaderProps) {
+  return (
+    <header className="safe-top flex justify-between items-center gap-2 px-3 sm:px-5 py-4 bg-gray-900/80 backdrop-blur-md border-b border-white/10 shrink-0 shadow-lg relative z-10">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <IconButton onClick={toggleMute} label={isMuted ? '音を出す' : '音を消す'} active={false}>
+          {isMuted ? <VolumeX className="w-6 h-6 text-gray-300" /> : <Volume2 className="w-6 h-6 text-blue-300" />}
+        </IconButton>
+        <IconButton onClick={toggleReduceMotion} label={reduceMotion ? 'うごきをもどす' : 'うごきをへらす'} active={reduceMotion}>
+          {reduceMotion ? <ZapOff className="w-6 h-6" /> : <Zap className="w-6 h-6 text-yellow-300" />}
+        </IconButton>
+        <h1 className="text-3xl font-bold text-white tracking-wider items-center gap-2 drop-shadow-md hidden md:flex whitespace-nowrap">
           <span className="title-red"><R t="人狼" r="じんろう" /></span>ゲーム
           {isDayTime ? (
             <Sun className="w-8 h-8 text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]" fill="currentColor" />
@@ -314,23 +246,37 @@ function Header({ onOpenModal, isDayTime, isMuted, toggleMute }: { onOpenModal: 
           )}
         </h1>
       </div>
-      <button
-        onClick={() => { AudioManager.init(); AudioManager.playSE('click'); onOpenModal(); }}
-        className="flex justify-center items-center w-12 h-12 bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 rounded-full font-black text-3xl shadow-[0_4px_0_#b45309,0_4px_10px_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-[0_0px_0_#b45309] transition-all"
-        aria-label="あそびかた"
-      >
-        ？
-      </button>
+
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {canInstall && (
+          <IconButton onClick={onInstall} label="アプリとしてインストールする">
+            <Download className="w-6 h-6 text-emerald-300" />
+          </IconButton>
+        )}
+        {canPresent && (
+          <IconButton onClick={togglePresentation} label={presentation ? 'ふつうの大きさにもどす' : '大きく表示する（提示モード）'} active={presentation}>
+            {presentation ? <Minimize2 className="w-6 h-6" /> : <Maximize2 className="w-6 h-6" />}
+          </IconButton>
+        )}
+        <button
+          onClick={() => { AudioManager.init(); AudioManager.playSE('click'); onOpenModal(); }}
+          className="flex justify-center items-center min-w-[44px] min-h-[44px] w-11 h-11 bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 rounded-full font-black text-3xl shadow-[0_4px_0_#b45309,0_4px_10px_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-[0_0px_0_#b45309] transition-all shrink-0"
+          aria-label="あそびかた"
+        >
+          ？
+        </button>
+      </div>
     </header>
   );
 }
 
 function Footer() {
   return (
-    <footer className="safe-bottom text-center text-white/50 py-4 border-t border-white/10 bg-gray-900/80 backdrop-blur-md shrink-0 relative z-10">
+    // text-white/50 では背景に対して約 3.9:1 でコントラスト不足だったため /75 に上げた
+    <footer className="safe-bottom text-center text-white/75 py-4 border-t border-white/10 bg-gray-900/80 backdrop-blur-md shrink-0 relative z-10">
       <small className="text-sm font-bold flex items-center justify-center gap-1 tracking-wider">
         © 2026 人狼ゲーム
-        <a href="https://note.com/cute_borage86" target="_blank" rel="noopener noreferrer" className="no-underline text-white/70 hover:text-white transition-colors ml-1">
+        <a href="https://note.com/cute_borage86" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-1">
           GIGA山
         </a>
       </small>
@@ -338,8 +284,33 @@ function Footer() {
   );
 }
 
+/** 新しい版が届いたことを知らせる帯。押されるまで勝手には切り替えない。 */
+function UpdateToast({ onApply, onDismiss }: { onApply: () => void; onDismiss: () => void }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed left-1/2 -translate-x-1/2 bottom-[calc(5rem+var(--safe-b))] z-[60] w-[min(92vw,32rem)] glass-panel border-2 border-yellow-400/60 p-4 flex items-center gap-3 animate-fade-in-up"
+    >
+      <RefreshCw className="w-8 h-8 text-yellow-300 shrink-0" />
+      <p className="text-lg font-bold text-left flex-grow leading-snug">
+        あたらしい バージョンが あります
+      </p>
+      <button
+        onClick={onApply}
+        className="btn-3d-base btn-3d-secondary px-4 py-2 text-lg shrink-0"
+      >
+        さいしんに する
+      </button>
+      <button onClick={onDismiss} aria-label="とじる" className="min-w-[44px] min-h-[44px] flex items-center justify-center text-white/80 hover:text-white shrink-0">
+        <X className="w-6 h-6" />
+      </button>
+    </div>
+  );
+}
+
 // --- あそびかたモーダル ---
-function HowToPlayModal({ onClose }: { onClose: () => void }) {
+function HowToPlayModal({ onClose, showIosGuide }: { onClose: () => void; showIosGuide: boolean }) {
   const steps = [
     {
       icon: <Users className="w-10 h-10 text-cyan-400" />,
@@ -368,22 +339,57 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
     },
   ];
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // モーダルを開いているあいだは、Esc で閉じられて、Tab がモーダルの外へ
+  // 抜けないようにする（キーボードだけで操作する人が迷子にならないため）。
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-md" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="glass-panel w-full max-w-2xl max-h-[90dvh] flex flex-col border-[3px] border-yellow-400/50 shadow-[0_0_50px_rgba(250,204,21,0.2)] overflow-hidden animate-fade-in-up rounded-[32px]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-label="あそびかた"
       >
-        <div className="bg-white/10 border-b border-white/20 p-5 flex justify-between items-center shrink-0">
-          <h2 className="text-3xl font-bold title-text flex items-center gap-3 drop-shadow-lg">
-            <span className="bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 rounded-full w-10 h-10 flex items-center justify-center text-2xl shadow-inner">？</span>
+        <div className="bg-white/10 border-b border-white/20 p-5 flex justify-between items-center gap-3 shrink-0">
+          <h2 className="text-3xl font-bold title-text flex items-center gap-3 drop-shadow-lg min-w-0">
+            <span className="bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 rounded-full w-10 h-10 flex items-center justify-center text-2xl shadow-inner shrink-0">？</span>
             あそびかた
           </h2>
           <button
+            ref={closeRef}
             onClick={() => { AudioManager.playSE('click'); onClose(); }}
-            className="w-12 h-12 bg-white/10 hover:bg-rose-500/80 rounded-full flex items-center justify-center text-white font-bold transition-all shadow-md border border-white/20"
+            className="min-w-[44px] min-h-[44px] w-11 h-11 bg-white/10 hover:bg-rose-500/80 rounded-full flex items-center justify-center text-white font-bold transition-all shadow-md border border-white/20 shrink-0"
             aria-label="とじる"
           >
             <X className="w-8 h-8" />
@@ -396,20 +402,51 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
               <div className="shrink-0 bg-white/5 p-4 rounded-2xl border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.5)]">
                 {step.icon}
               </div>
-              <div className="text-left flex-grow pt-1">
+              <div className="text-left flex-grow pt-1 min-w-0">
                 <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2 tracking-wide">
                   <span className="text-yellow-400 text-2xl font-black">{index + 1}.</span> {step.title}
                 </h3>
-                <p className="text-gray-300 font-bold leading-relaxed text-lg">{step.desc}</p>
+                <p className="text-gray-200 font-bold leading-relaxed text-lg">{step.desc}</p>
               </div>
             </div>
           ))}
+
+          {showIosGuide && <IosInstallGuide />}
 
           <Button onClick={onClose} variant="primary" className="mt-6">
             わかった！
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * iPhone / iPad 向けの「ホーム画面に追加」案内。
+ * iOS Safari には beforeinstallprompt が無く、ボタン一発で入れる方法が存在しない。
+ * さらに ITP により、7日間使わないと保存データが消される。ホーム画面に追加して
+ * もらうことがそのまま対策になるので、手順を画面の中で案内する。
+ */
+function IosInstallGuide() {
+  return (
+    <div className="bg-emerald-950/60 border-2 border-emerald-400/60 p-5 rounded-2xl text-left shadow-inner">
+      <h3 className="text-xl font-bold text-emerald-200 mb-3 flex items-center gap-2">
+        <Download className="w-6 h-6 shrink-0" />
+        アプリとして<R t="入" r="い" />れておくと<R t="便利" r="べんり" />です
+      </h3>
+      <ol className="text-gray-100 font-bold leading-relaxed text-lg space-y-2 list-decimal list-inside">
+        <li>
+          <R t="画面" r="がめん" />の<R t="下" r="した" />（または<R t="上" r="うえ" />）にある
+          <Share className="w-5 h-5 inline-block mx-1 align-text-bottom text-blue-300" aria-label="共有ボタン" />
+          <R t="共有" r="きょうゆう" />ボタンを<R t="押" r="お" />す
+        </li>
+        <li>メニューを<R t="下" r="した" />にスクロールする</li>
+        <li>「ホーム<R t="画面" r="がめん" />に<R t="追加" r="ついか" />」を<R t="選" r="えら" />ぶ</li>
+      </ol>
+      <p className="text-emerald-200/90 font-bold mt-3 text-base">
+        ※こうしておくと、<R t="全画面" r="ぜんがめん" />で<R t="遊" r="あそ" />べて、つながっていなくても<R t="開" r="ひら" />けます。
+      </p>
     </div>
   );
 }
@@ -421,9 +458,45 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMuted, setIsMuted] = useState(AudioManager.isMuted);
+  const { settings, update: updateSettings } = useSettings();
+  const [isMuted, setIsMuted] = useState(settings.muted);
+  const [presentation, setPresentation] = useState(false);
+  const { canInstall, install, showIosGuide } = useInstallPrompt();
+  const { needRefresh, applyUpdate, dismiss } = useServiceWorkerUpdate();
 
   const isDayTime = gameState && ['day', 'vote', 'voteResult'].includes(gameState.phase);
+
+  // 「役職の確認」と「夜の行動」は、ひとりだけがのぞき込む画面。
+  // ここで提示モード（文字を大きくする）を効かせると、となりの席から
+  // 役職が見えてしまいゲームが壊れるので、この2画面では出さない・効かせない。
+  const isSecretPhase = gameState?.phase === 'roleCheck' || gameState?.phase === 'night';
+  const presentationActive = presentation && !isSecretPhase;
+
+  // 起動時に一度だけ、保存してある音の設定を AudioManager へ反映する
+  useEffect(() => {
+    AudioManager.isMuted = settings.muted;
+    setIsMuted(settings.muted);
+    // 初期化時のみ。以降はボタン操作から双方向に更新する。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const next = AudioManager.toggleMute();
+    setIsMuted(next);
+    updateSettings({ muted: next });
+  }, [updateSettings]);
+
+  const togglePresentation = useCallback(() => {
+    setPresentation((prev) => {
+      const next = !prev;
+      // 電子黒板に映すときは、ブラウザの枠を消したほうが大きく見える。
+      // フルスクリーンは端末やブラウザによって拒否されることがあるので、
+      // 失敗しても提示モード自体は成立させる（catch して無視）。
+      if (next) document.documentElement.requestFullscreen?.().catch(() => {});
+      else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+      return next;
+    });
+  }, []);
 
   const updateState = (updater: (draft: GameState) => void | Partial<GameState>) => {
     setGameState((prev) => {
@@ -682,7 +755,7 @@ export default function App() {
       return (
         <ScreenLayout title={<>ゲーム<R t="終了" r="しゅうりょう" />！</>}>
           <div className="space-y-8 flex flex-col justify-center h-full">
-            <div className="p-8 border-[3px] border-yellow-400/50 rounded-[32px] bg-yellow-900/30 shadow-[0_0_40px_rgba(250,204,21,0.3)] glow-box">
+            <div role="status" aria-live="polite" className="p-8 border-[3px] border-yellow-400/50 rounded-[32px] bg-yellow-900/30 shadow-[0_0_40px_rgba(250,204,21,0.3)] glow-box">
               <h3 className="text-4xl md:text-5xl font-black text-yellow-400 drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] tracking-wider">
                 <R t={gameState.winner!} r={gameState.winner === '村人陣営' ? 'むらびとじんえい' : 'じんろうじんえい'} />の<R t="勝利" r="しょうり" />！
               </h3>
@@ -695,7 +768,11 @@ export default function App() {
                   <li key={p.id} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 shadow-sm">
                     <span className="text-2xl font-bold flex items-center gap-3">
                       {!p.isAlive && <Skull className="w-7 h-7 text-rose-500 drop-shadow-md" />}
-                      <span className={!p.isAlive ? 'line-through text-white/40' : 'text-white drop-shadow-md'}>{p.name}</span>
+                      {/* 生死は「色」だけで伝えない。ドクロ・取り消し線・
+                          読み上げ用の文字の3つで示す（色覚特性への配慮）。
+                          text-white/40 はコントラスト不足だったので /65 に上げた。 */}
+                      <span className={!p.isAlive ? 'line-through text-white/65' : 'text-white drop-shadow-md'}>{p.name}</span>
+                      <span className="sr-only">{p.isAlive ? '（生きています）' : '（ゲームから外れました）'}</span>
                     </span>
                     <span className={`text-2xl font-black ${ROLE_DETAILS[p.role].color} drop-shadow-md`}>
                       <R t={p.role} r={ROLE_DETAILS[p.role].ruby} />
@@ -716,14 +793,26 @@ export default function App() {
   };
 
   return (
-    <div className="relative flex flex-col h-[100dvh] overflow-hidden font-sans">
+    <div className={`app-shell relative flex flex-col overflow-hidden font-sans ${presentationActive ? 'presentation' : ''}`}>
       {/* 背景のクロスフェードアニメーション */}
       <div className={`fixed inset-0 bg-night z-[-2] transition-opacity duration-1000 ${isDayTime ? 'opacity-0' : 'opacity-100'}`} />
       <div className={`fixed inset-0 bg-day z-[-2] transition-opacity duration-1000 ${isDayTime ? 'opacity-100' : 'opacity-0'}`} />
       <div className={`stars-overlay z-[-1] transition-opacity duration-1000 ${isDayTime ? 'opacity-0' : 'opacity-100'}`} />
       <div className={`clouds-overlay z-[-1] transition-opacity duration-1000 ${isDayTime ? 'opacity-100' : 'opacity-0'}`} />
 
-      <Header onOpenModal={() => setIsModalOpen(true)} isDayTime={isDayTime} isMuted={isMuted} toggleMute={() => setIsMuted(AudioManager.toggleMute())} />
+      <Header
+        onOpenModal={() => setIsModalOpen(true)}
+        isDayTime={isDayTime}
+        isMuted={isMuted}
+        toggleMute={toggleMute}
+        reduceMotion={settings.reduceMotion}
+        toggleReduceMotion={() => updateSettings({ reduceMotion: !settings.reduceMotion })}
+        canPresent={!isSecretPhase}
+        presentation={presentation}
+        togglePresentation={togglePresentation}
+        canInstall={canInstall}
+        onInstall={install}
+      />
 
       <main className="flex-grow overflow-y-auto p-2 sm:p-4 md:p-6 w-full flex flex-col items-center">
         {renderPhase()}
@@ -731,7 +820,8 @@ export default function App() {
 
       <Footer />
 
-      {isModalOpen && <HowToPlayModal onClose={() => setIsModalOpen(false)} />}
+      {isModalOpen && <HowToPlayModal onClose={() => setIsModalOpen(false)} showIosGuide={showIosGuide} />}
+      {needRefresh && applyUpdate && <UpdateToast onApply={applyUpdate} onDismiss={dismiss} />}
     </div>
   );
 }
@@ -799,7 +889,10 @@ function SetupPhase({ onStart }: { onStart: (count: number, names: string[], rol
                 key={n}
                 onClick={() => setPlayerCount(n)}
                 variant={playerCount === n ? 'primary' : 'ghost'}
-                className="py-4 text-2xl !rounded-2xl"
+                // 320px 幅では 3列のセルが約 63px しかない。「10人（にん）」は
+                // ふりがなのぶん横に広く、既定の余白と文字サイズだと2行に折れて
+                // 下が欠けるので、狭い画面でだけ余白と文字を詰める。
+                className="py-4 !px-1 sm:!px-4 text-xl sm:text-2xl whitespace-nowrap !rounded-2xl"
               >
                 {n}<R t="人" r="にん" />
               </Button>
@@ -987,7 +1080,9 @@ function DayPhase({ gameState, onStartVote, onShowResult }: { gameState: GameSta
   return (
     <ScreenLayout title={<>{gameState.day}<R t="日目" r="にちめ" />の<R t="昼" r="ひる" /></>}>
       {gameState.gameMessage && (
-        <div className="bg-gradient-to-r from-blue-900/60 to-transparent border-l-[8px] border-blue-400 p-6 rounded-2xl text-left mb-8 text-2xl font-bold shrink-0 shadow-lg tracking-wide">
+        // aria-live: 画面を見ていない／読み上げを使う人にも、犠牲者や
+        // 追放結果といった「状況が変わったこと」がその場で伝わるようにする
+        <div role="status" aria-live="polite" className="bg-gradient-to-r from-blue-900/60 to-transparent border-l-[8px] border-blue-400 p-6 rounded-2xl text-left mb-8 text-2xl font-bold shrink-0 shadow-lg tracking-wide">
           {gameState.gameMessage}
         </div>
       )}
@@ -1052,7 +1147,7 @@ function VotePhase({ gameState, onVote }: { gameState: GameState; onVote: (id: n
   return (
     <ScreenLayout title={gameState.tieBreakVote ? <span className="title-red"><R t="決選投票" r="けっせんとうひょう" /></span> : <><R t="投票" r="とうひょう" /></>}>
       {gameState.gameMessage && (
-        <div className="bg-rose-900/50 border-l-[8px] border-rose-500 p-6 rounded-2xl text-left mb-8 text-2xl font-bold text-white shrink-0 shadow-lg">
+        <div role="status" aria-live="polite" className="bg-rose-900/50 border-l-[8px] border-rose-500 p-6 rounded-2xl text-left mb-8 text-2xl font-bold text-white shrink-0 shadow-lg">
           {gameState.gameMessage}
         </div>
       )}
@@ -1097,7 +1192,7 @@ function VoteResultPhase({ gameState, onNext }: { gameState: GameState; onNext: 
         )}
 
         <div className="shrink-0">
-          <div className={`p-8 rounded-[32px] text-left mb-8 border-l-[12px] shadow-xl ${gameState.exiledPlayerId !== null ? 'bg-rose-900/50 border-rose-500 text-white' : 'bg-gray-800/80 border-gray-500'}`}>
+          <div role="status" aria-live="polite" className={`p-8 rounded-[32px] text-left mb-8 border-l-[12px] shadow-xl ${gameState.exiledPlayerId !== null ? 'bg-rose-900/50 border-rose-500 text-white' : 'bg-gray-800/80 border-gray-500'}`}>
             <p className="text-3xl font-bold leading-relaxed">{gameState.gameMessage}</p>
             {gameState.winner && (
               <p className="text-2xl text-yellow-400 mt-6 font-black tracking-wider">ゲームの<R t="決着" r="けっちゃく" />がつきました！</p>
@@ -1120,7 +1215,7 @@ function NightPhase({ player, gameState, onAction, onNext }: { player: Player; g
     return (
       <ScreenLayout title={<><R t="行動結果" r="こうどうけっか" /></>}>
         <div className="flex flex-col justify-center h-full space-y-12 my-auto">
-          <div className="bg-gradient-to-b from-blue-900/80 to-indigo-900/80 border-[4px] border-blue-400 p-10 rounded-[32px] text-center shadow-[0_0_40px_rgba(96,165,250,0.4)] text-3xl md:text-4xl font-bold leading-relaxed tracking-wide">
+          <div role="status" aria-live="polite" className="bg-gradient-to-b from-blue-900/80 to-indigo-900/80 border-[4px] border-blue-400 p-10 rounded-[32px] text-center shadow-[0_0_40px_rgba(96,165,250,0.4)] text-3xl md:text-4xl font-bold leading-relaxed tracking-wide">
             {gameState.nightActionResult}
           </div>
           <p className="text-2xl text-yellow-400 font-bold drop-shadow-md tracking-wide"><R t="確認" r="かくにん" />したら<R t="次" r="つぎ" />の<R t="人" r="ひと" />に<R t="渡" r="わた" />してね。</p>
