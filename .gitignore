@@ -6,6 +6,15 @@ dist-ssr
 .vite
 *.tsbuildinfo
 
+# 秘密情報（誤ってコミットしないための保険）
+.env
+.env.*
+!.env.example
+.clasp.json
+
+# 画像を圧縮する前の元データ（容量が大きいので配布物には含めない）
+.assets-original/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

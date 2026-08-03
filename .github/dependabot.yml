@@ -1,0 +1,21 @@
+# 依存パッケージの更新提案を毎月受け取る。
+# 学校で使うアプリは「動いているものを壊さない」ことが最優先なので、
+# 頻度は monthly に抑え、まとめて確認できるようにしている。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    # メジャー更新は破壊的変更を含みうるため、自動 PR の対象から外す。
+    # 必要になったら人間が判断して手動で上げる。
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
