@@ -38,11 +38,23 @@ body {
     'Noto Sans JP', 'Yu Gothic UI', system-ui, sans-serif;
   background-color: #050510;
   color: #fff;
-  overflow: hidden;
+  /* overflow:hidden を外した理由:
+     以前は body を hidden にして、中の <main> だけをスクロールさせていた。
+     この形だと「ページ自体」は1ピクセルも動かないので、
+     ・スクロールバーを掴んで動かす
+     ・スペースキーでページ送りする
+     ・ブラウザの検索で画面外の語まで飛ぶ
+     といった、ふつうのページなら効く操作がすべて死ぬ。実際に
+     「スクロールできなくてゲーム開始ボタンに届かない」という形で表に出た。
+     ドキュメントに素直にスクロールさせる。
+     なお overflow-x:hidden も付けていない。body に付けると overflow-y が
+     auto に化けて body 自身がスクロール箱になり、ヘッダーや開始ボタンの
+     position:sticky が画面に貼り付かなくなるため。横あふれは
+     scripts/check-project.mjs と実ブラウザ検証で 0 を確認している。 */
   line-height: 1.8; /* 児童向けは行間を広く。Tailwind の text-* 指定側が優先される */
   user-select: none;
   -webkit-user-select: none;
-  overscroll-behavior: none;
+  overscroll-behavior-y: contain; /* 引っぱり更新の暴発だけ防ぐ */
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -52,9 +64,12 @@ body {
    古い ChromeOS / iOS には無いので 100vh を1行上に残してフォールバックにする。
    左右はノッチ側が欠けないようセーフエリアを足す。
    ========================================================================== */
+/* height ではなく min-height。中身が画面より高いときは、器のほうが伸びて
+   ドキュメントごとスクロールする。height で固定すると中身がはみ出し、
+   内側の入れ子スクロールに頼るしかなくなる（それが上のバグの元だった）。 */
 .app-shell {
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
   padding-left: var(--safe-l);
   padding-right: var(--safe-r);
 }
@@ -74,9 +89,10 @@ button,
   min-height: 44px;
 }
 
-/* スクロールする箱の中で引っぱり更新が暴発しないようにする */
-.scroll-area,
-.overflow-y-auto {
+/* 入れ子のスクロール領域（いまはモーダルの中だけ）が、
+   端まで来たときに親までスクロールを引き継がないようにする。
+   ページ全体のスクロールを妨げないよう、対象は明示したものだけに絞る。 */
+.scroll-area {
   overscroll-behavior: contain;
 }
 
@@ -105,7 +121,9 @@ button,
 }
 
 .stars-overlay {
-  position: absolute;
+  /* fixed にしているのは、ページが画面より高くなったときに、背景だけが
+     いっしょに流れていかないようにするため（bg-night / bg-day と揃える）。 */
+  position: fixed;
   inset: 0;
   background-image:
     radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
@@ -127,7 +145,7 @@ button,
 
 /* 雲のオーバーレイ (昼用) */
 .clouds-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background-image:
     radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.4) 0%, transparent 40%),
@@ -320,10 +338,37 @@ rp {
   padding-bottom: max(1rem, var(--safe-b));
 }
 
-/* スクロールバーの非表示（スマホライク） */
+/* ==========================================================================
+   スクロールバー
+   以前は width:0 で完全に消していたが、このアプリは設定画面が画面3枚分ほど
+   あり、下端に「ゲーム開始」がある。バーが見えないうえに user-scalable=no で
+   引いて全体を見ることもできないため、「スクロールできない」と受け取られていた。
+   邪魔にならない細さで、必ず見えるようにする。
+   ========================================================================== */
 ::-webkit-scrollbar {
-  width: 0px;
-  background: transparent;
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.55);
+  background-clip: content-box;
+}
+/* Firefox と新しめの Chrome。この2つを書くと Chrome は ::-webkit-scrollbar を
+   無視して標準プロパティ側を使う。全称セレクタには当てず、実際にスクロールする
+   場所（ページ本体とモーダルの中）だけに絞る。 */
+:root,
+.scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.4) rgba(255, 255, 255, 0.06);
 }
 
 /* ==========================================================================

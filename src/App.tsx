@@ -158,7 +158,7 @@ function ScreenLayout({ title, children }: { title: React.ReactNode; children: R
           <h2 className="text-3xl font-bold text-center title-text tracking-wide">{title}</h2>
         </div>
       )}
-      <div className="p-5 sm:p-6 md:p-8 flex-grow flex flex-col text-center overflow-y-auto">
+      <div className="p-5 sm:p-6 md:p-8 flex-grow flex flex-col text-center">
         {children}
       </div>
     </div>
@@ -229,7 +229,7 @@ function Header({
   canPresent, presentation, togglePresentation, canInstall, onInstall,
 }: HeaderProps) {
   return (
-    <header className="safe-top flex justify-between items-center gap-2 px-3 sm:px-5 py-4 bg-gray-900/80 backdrop-blur-md border-b border-white/10 shrink-0 shadow-lg relative z-10">
+    <header className="safe-top flex justify-between items-center gap-2 px-3 sm:px-5 py-4 bg-gray-900/95 backdrop-blur-md border-b border-white/10 shrink-0 shadow-lg sticky top-0 z-20">
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <IconButton onClick={toggleMute} label={isMuted ? '音を出す' : '音を消す'} active={false}>
           {isMuted ? <VolumeX className="w-6 h-6 text-gray-300" /> : <Volume2 className="w-6 h-6 text-blue-300" />}
@@ -396,7 +396,7 @@ function HowToPlayModal({ onClose, showIosGuide }: { onClose: () => void; showIo
           </button>
         </div>
 
-        <div className="p-5 md:p-8 overflow-y-auto flex-grow space-y-5">
+        <div className="p-5 md:p-8 overflow-y-auto scroll-area flex-grow space-y-5">
           {steps.map((step, index) => (
             <div key={index} className="flex gap-5 bg-black/40 p-5 rounded-2xl items-start border border-white/10 shadow-inner">
               <div className="shrink-0 bg-white/5 p-4 rounded-2xl border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.5)]">
@@ -761,7 +761,7 @@ export default function App() {
               </h3>
             </div>
 
-            <div className="bg-black/30 p-6 rounded-3xl flex-grow overflow-y-auto border border-white/10 shadow-inner">
+            <div className="bg-black/30 p-6 rounded-3xl flex-grow border border-white/10 shadow-inner">
               <h3 className="text-2xl font-bold border-b-2 border-white/20 pb-4 mb-5 tracking-widest text-blue-200"><R t="全員" r="ぜんいん" />の<R t="役職" r="やくしょく" /></h3>
               <ul className="space-y-4 text-left">
                 {gameState.players.map((p) => (
@@ -793,7 +793,7 @@ export default function App() {
   };
 
   return (
-    <div className={`app-shell relative flex flex-col overflow-hidden font-sans ${presentationActive ? 'presentation' : ''}`}>
+    <div className={`app-shell relative flex flex-col font-sans ${presentationActive ? 'presentation' : ''}`}>
       {/* 背景のクロスフェードアニメーション */}
       <div className={`fixed inset-0 bg-night z-[-2] transition-opacity duration-1000 ${isDayTime ? 'opacity-0' : 'opacity-100'}`} />
       <div className={`fixed inset-0 bg-day z-[-2] transition-opacity duration-1000 ${isDayTime ? 'opacity-100' : 'opacity-0'}`} />
@@ -814,7 +814,7 @@ export default function App() {
         onInstall={install}
       />
 
-      <main className="flex-grow overflow-y-auto p-2 sm:p-4 md:p-6 w-full flex flex-col items-center">
+      <main className="flex-grow p-2 sm:p-4 md:p-6 w-full flex flex-col items-center">
         {renderPhase()}
       </main>
 
@@ -931,7 +931,7 @@ function SetupPhase({ onStart }: { onStart: (count: number, names: string[], rol
           )}
         </div>
 
-        <div className="bg-black/30 p-6 md:p-8 rounded-[32px] border border-white/10 text-left flex-grow overflow-y-auto min-h-[200px] shadow-inner">
+        <div className="bg-black/30 p-6 md:p-8 rounded-[32px] border border-white/10 text-left flex-grow shadow-inner">
           <p className="text-blue-200/70 font-bold mb-6 text-lg tracking-wide">（<R t="名前" r="なまえ" />は<R t="変" r="か" />えることもできます）</p>
           <div className="space-y-4">
             {names.slice(0, playerCount).map((name, i) => (
@@ -956,6 +956,10 @@ function SetupPhase({ onStart }: { onStart: (count: number, names: string[], rol
           </div>
         </div>
 
+        {/* 開始ボタンは画面下端に貼り付けない（sticky にしない）。
+            設定画面の下端に固定すると、スクロールの途中で人数ボタンや名前の
+            入力欄の上に重なり、そちらを押したつもりが開始ボタンに吸われる。
+            ページ自体がふつうにスクロールするようになったので、流れの中に置く。 */}
         <Button onClick={handleStart} variant="secondary" icon={<Play className="w-8 h-8" />} className="mt-2" disabled={!canStart}>
           ゲーム<R t="開始" r="かいし" />
         </Button>
@@ -1087,7 +1091,7 @@ function DayPhase({ gameState, onStartVote, onShowResult }: { gameState: GameSta
         </div>
       )}
 
-      <div className="bg-black/30 p-6 md:p-8 rounded-[32px] mb-8 flex-grow overflow-y-auto min-h-0 border border-white/10 shadow-inner">
+      <div className="bg-black/30 p-6 md:p-8 rounded-[32px] mb-8 flex-grow border border-white/10 shadow-inner">
         <h3 className="text-2xl font-bold text-blue-200/80 text-left border-b-2 border-white/20 pb-3 mb-6 tracking-widest">
           <R t="生" r="い" />きているプレイヤー
         </h3>
@@ -1159,7 +1163,7 @@ function VotePhase({ gameState, onVote }: { gameState: GameState; onVote: (id: n
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-5 flex-grow overflow-y-auto content-start">
+      <div className="grid grid-cols-2 gap-5 flex-grow content-start">
         {targets.filter((t) => t.id !== voter.id).map((target) => (
           <button
             key={target.id}
@@ -1179,7 +1183,7 @@ function VoteResultPhase({ gameState, onNext }: { gameState: GameState; onNext: 
     <ScreenLayout title={<><R t="投票結果" r="とうひょうけっか" /></>}>
       <div className="flex-grow flex flex-col justify-between">
         {gameState.voteResultData && (
-          <div className="bg-black/30 p-6 md:p-8 rounded-[32px] mb-8 flex-grow overflow-y-auto border border-white/10 shadow-inner">
+          <div className="bg-black/30 p-6 md:p-8 rounded-[32px] mb-8 flex-grow border border-white/10 shadow-inner">
             <ul className="space-y-5 text-left">
               {gameState.voteResultData.map((result) => (
                 <li key={result.name} className="flex justify-between items-center bg-white/10 p-5 rounded-2xl border border-white/20 shadow-md">
@@ -1257,7 +1261,7 @@ function NightPhase({ player, gameState, onAction, onNext }: { player: Player; g
         emerald: 'from-emerald-500 to-teal-700 shadow-[0_8px_0_#047857,0_15px_20px_rgba(0,0,0,0.4)] active:shadow-[0_0px_0_#047857]',
       };
       return (
-        <div className="grid grid-cols-2 gap-5 mt-8 flex-grow overflow-y-auto content-start">
+        <div className="grid grid-cols-2 gap-5 mt-8 flex-grow content-start">
           {targets.filter(filterFn).map((t) => (
             <button key={t.id} onClick={() => { AudioManager.init(); AudioManager.playSE('click'); onAction(action, t.id); }} className={`btn-3d-base bg-gradient-to-br ${bgMap[color] || bgMap.purple} text-white font-bold text-2xl h-full min-h-[7rem] p-4 tracking-wide`}>
               {t.name}
