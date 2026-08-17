@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 // このリポジトリが GitHub Pages で公開されるパス。
 // manifest の識別子（id / scope / start_url）だけは、ここを絶対パスで書く。
 // 理由は下の manifest のコメントを参照。
-const REPO_BASE = '/Werewolf/';
+const REPO_BASE = './';
 
 // ==========================================================================
 // CSP（Content Security Policy）をビルド成果物の index.html にだけ差し込む。

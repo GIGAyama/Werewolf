@@ -118,7 +118,11 @@ check('no-secrets', 'B2 秘密情報・IDの直書きが無い', () => {
     if (/AIza[0-9A-Za-z_-]{30,}/.test(s)) hits.push(`${relative(root, f)}: APIキー風の文字列`);
     if (/["'][0-9A-Za-z_-]{40,44}["']\s*(;|,|\))/.test(s) && /(sheet|spreadsheet|scriptId)/i.test(s))
       hits.push(`${relative(root, f)}: シートID風の文字列`);
-    if (/[\w.+-]+@(gmail|outlook|yahoo)\.[a-z.]+/i.test(s)) hits.push(`${relative(root, f)}: メールアドレス`);
+    // プライバシーポリシーと利用規約は、運用者の連絡先を書くことが目的のページである。
+    // ここでメールアドレスを咎めると「載せると CI が落ちる／消すと法的に不備」になり、
+    // どちらにも進めない。この2ページだけメールアドレスの検査から外す（鍵・IDの検査は効かせる）。
+    const isLegalPage = /(^|\/)(privacy|terms)\.html$/.test(relative(root, f));
+    if (!isLegalPage && /[\w.+-]+@(gmail|outlook|yahoo)\.[a-z.]+/i.test(s)) hits.push(`${relative(root, f)}: メールアドレス`);
   }
   return { ok: hits.length === 0, detail: hits.join(' / ') };
 });
@@ -248,7 +252,7 @@ check('forced-colors', 'D14 forced-colors（ハイコントラスト）に対応
 // ==========================================================================
 // E. PWA
 // ==========================================================================
-check('manifest-id', 'E1 manifest の id/scope/start_url がリポジトリ名の絶対パス', () => {
+check('manifest-id', 'E1 manifest の id/scope/start_url が配信場所と合っている', () => {
   if (!manifest) return { ok: false, detail: 'dist/manifest.webmanifest が無い（先に npm run build）' };
   const base = cfg.repoBase;
   const problems = [];

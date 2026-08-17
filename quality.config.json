@@ -2,7 +2,8 @@
   "$comment": "GIGA Standard v4 の品質ゲートの設定。scripts/check-project.mjs が読む。検査を緩めたいときは、必ず理由を書いて exceptions に足すこと。",
 
   "appType": "B",
-  "repoBase": "/Werewolf/",
+  "_repoBase": "manifest の id/scope/start_url に期待する値。独自ドメインではアプリは werewolf.giga-school.com の直下で配信されるので相対パス \"./\"。リポジトリ名の絶対パスに戻すと scope がページの URL を含まなくなり、PWA としてインストールできなくなる。vite.config.ts の REPO_BASE と同じ値にすること。",
+  "repoBase": "./",
   "distDir": "dist",
 
   "budgets": {
