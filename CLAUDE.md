@@ -8,7 +8,7 @@
 ## 1. このアプリは何か
 
 小学生・タブレット向けの**人狼ゲーム**。React + TypeScript + Vite の SPA で、GitHub Pages
-（`https://gigayama.github.io/Werewolf/`）に静的配信している。
+（`https://werewolf.giga-school.com/`）に静的配信している。
 
 前提として押さえておくべき性質が4つある。ほとんどの設計判断はここから来ている。
 
@@ -204,16 +204,21 @@ const R = ({ t, r }: { t: string; r: string }) => (
 ### REPO_BASE（`vite.config.ts`）
 
 ```ts
-const REPO_BASE = '/Werewolf/';   // id / scope / start_url はここから組み立てる
+const REPO_BASE = './';   // id / scope / start_url はここから組み立てる
 ```
 
-アセット自体は相対パス（`base: './'`）で出るのでどこに置いても動くが、**manifest の
-`id` / `scope` / `start_url` だけは絶対パス**にしてある。`gigayama.github.io` は数十個の
-アプリが同一オリジンを共有しており、`id` を省くと解決後の `start_url` が代替の識別子になって
-「開いたら違うアプリが立ち上がる」事故が起きるため。
+独自ドメイン `werewolf.giga-school.com` へ移り、アプリはドメイン直下に置かれている。
+アセットは相対パス（`base: './'`）で出るのでどこに置いても動き、manifest の
+`id` / `scope` / `start_url` も `REPO_BASE` から組み立てて `"./"` にしてある。
 
-- このリポジトリをコピーして別アプリを作るなら、まず `REPO_BASE` と `quality.config.json` の `repoBase` を書き換える。
-- カスタムドメインへ移すときも `REPO_BASE` の変更が必要。
+⚠️ 旧構成（`gigayama.github.io/Werewolf/`）のように**リポジトリ名の絶対パスに戻さないこと。**
+戻すと `scope` がページの URL を含まなくなり、manifest ごと無視されて
+PWA としてインストールできなくなる。
+`id` を省くのも不可。省くと解決後の `start_url` が代替の識別子になり、
+URL を少し直しただけで別アプリ扱いになる。
+
+- このリポジトリをコピーして別アプリを作るなら、まず `quality.config.json` の `repoBase` を書き換える。
+- 配信場所を変えるときは `REPO_BASE` を配信場所に合わせる。
 - **`id` を変えると、インストール済み端末では「別のアプリ」になる。**
 
 ### registerType は `'prompt'`（`autoUpdate` にしない）

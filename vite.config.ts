@@ -3,7 +3,10 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // このリポジトリが GitHub Pages で公開されるパス。
-// manifest の識別子（id / scope / start_url）だけは、ここを絶対パスで書く。
+// manifest の識別子（id / scope / start_url）は、ここから組み立てる。
+// 独自ドメイン werewolf.giga-school.com の直下に置いているので "./"。
+// リポジトリ名の絶対パス（旧 /Werewolf/）に戻すと、scope がページの URL を
+// 含まなくなって manifest ごと無視され、インストールできなくなる。
 // 理由は下の manifest のコメントを参照。
 const REPO_BASE = './';
 

@@ -86,7 +86,7 @@ PNG で、合計およそ 3MB です。
 | 中学年くらいから読める | `MANUAL.md` の「対象：小学校中学年〜」 |
 | 配信量は約548キロバイト | `npm run check` の F5 が「547.6KB」。`dist/` の合計は 560,745 バイト |
 | 外部への通信なし | `npm run check` の F7 に合格。`dist/` を検索しても外部オリジンへの参照はフッターの note リンクだけ |
-| 許可が必要なアドレスは gigayama.github.io だけ | `vite.config.ts` の `REPO_BASE` と `MANUAL.md` |
+| 許可が必要なアドレスは werewolf.giga-school.com だけ | `vite.config.ts` の `REPO_BASE` と `MANUAL.md` |
 | 端末に残るのは音とうごきの設定の2つだけ | `src/settings.ts`。保存先は `werewolf.settings.v1` のひとつだけ |
 | 名前はどこにも送られず、閉じると消える | `src/App.tsx`。名前は React の状態にしか持たず、保存していない |
 | 進み具合を保存しない | `src/App.tsx`。ゲームの状態はメモリ上だけ。`MANUAL.md` にも意図として明記 |
