@@ -241,3 +241,23 @@ CSP は**ビルド成果物にだけ**注入しています。開発サーバー
 MIT License — [LICENSE](./LICENSE) を参照してください。
 
 © 2026 人狼ゲーム [GIGA山](https://note.com/cute_borage86)
+
+
+## 素材とライセンス
+
+このアプリは、次の第三者の成果物を使っています。
+
+| 使っているもの | 用途 | ライセンス |
+| --- | --- | --- |
+| [M PLUS Rounded 1c](https://github.com/coz-m/MPLUS_FONTS) | 画面の書体（`public/fonts/` に同梱） | **SIL Open Font License 1.1** © 2021 The M+ FONTS Project Authors |
+| React / React DOM | 画面の組み立て | MIT License |
+| [lucide-react](https://lucide.dev/) | アイコン | ISC License |
+
+**同梱している書体について。** `public/fonts/mplus-rounded-1c-700.woff2` と `-900.woff2` は、
+M PLUS Rounded 1c を必要な文字だけに絞って（サブセット化して）同梱したものです。
+この書体は **SIL Open Font License 1.1** で提供されており、再配布にあたっては
+著作権表示とライセンス全文を添える必要があります。全文は
+[`public/fonts/OFL.txt`](public/fonts/OFL.txt) に置いてあります。
+
+このリポジトリの LICENSE（MIT）は、**自作のソースコードにのみ適用されます。**
+同梱の書体は SIL OFL 1.1 が適用され、MIT では再配布できません。
