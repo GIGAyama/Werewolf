@@ -154,7 +154,7 @@ scope:     /Werewolf/
 start_url: /Werewolf/?source=pwa
 ```
 
-`gigayama.github.io` は数十個のアプリが**同一オリジンを共有**しています。
+旧配信元の `gigayama.github.io` は数十個のアプリが**同一オリジンを共有**していました。
 `id` を省略すると解決後の `start_url` が代替の識別子になり、URL を少し直しただけで
 別アプリ扱いになったり、似た構成の別アプリと取り違えられて
 「開いたら違うアプリが立ち上がる」事故が起きます。
