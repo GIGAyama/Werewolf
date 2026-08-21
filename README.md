@@ -240,7 +240,7 @@ CSP は**ビルド成果物にだけ**注入しています。開発サーバー
 
 MIT License — [LICENSE](./LICENSE) を参照してください。
 
-© 2026 人狼ゲーム [GIGA山](https://note.com/cute_borage86)
+© 2026 人狼ゲーム [GIGA山](https://giga-school.com)
 
 
 ## 素材とライセンス

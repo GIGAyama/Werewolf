@@ -276,7 +276,7 @@ function Footer() {
     <footer className="safe-bottom text-center text-white/75 py-4 border-t border-white/10 bg-gray-900/80 backdrop-blur-md shrink-0 relative z-10">
       <small className="text-sm font-bold flex items-center justify-center gap-1 tracking-wider">
         © 2026 人狼ゲーム
-        <a href="https://note.com/cute_borage86" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-1">
+        <a href="https://giga-school.com" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-1">
           GIGA山
         </a>
       </small>
