@@ -176,7 +176,7 @@ A4 たて向きで出るように設定してあります。
 
 ## 9. 困ったときの連絡先
 
-このアプリは [GIGA山](https://note.com/cute_borage86) が作っています。
+このアプリは [GIGA山](https://giga-school.com) が作っています。
 不具合や「こうしてほしい」は、GitHub の Issues でも受け付けています。
 
 `https://github.com/GIGAyama/Werewolf/issues`
