@@ -12,6 +12,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, extname } from 'node:path';
+import { externalHosts } from './lib/external-origins.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -366,14 +367,16 @@ check('image-budget', 'F6 画像が容量の上限内', () => {
   return { ok: bad.length === 0, detail: bad.join(', ') };
 });
 check('no-external-origin', 'F7 配信物が外部オリジンへ通信しない', () => {
-  const hits = new Set();
-  for (const f of ['index.html', 'src/index.css', 'src/fonts.css']) {
-    for (const m of read(f).matchAll(/https?:\/\/([^/'")\s]+)/g)) {
-      // note.com へのリンク（フッターのクレジット）は通信ではないので除く
-      if (m[1] !== 'note.com') hits.add(m[1]);
-    }
-  }
-  return { ok: hits.size === 0, detail: [...hits].join(', ') };
+  // 見るのは「ブラウザが実際に取りに行くもの」だけ。判定は
+  // scripts/lib/external-origins.mjs にある（理由と経緯もそこに書いてある）。
+  // 以前はファイル中の http(s):// を全部あつめていたため、og:url / og:image に
+  // 自分自身のアドレスを書いた時点で赤くなり、本番が2コミット分止まった。
+  const files = ['index.html', 'src/index.css', 'src/fonts.css'].map((path) => ({
+    path,
+    text: read(path),
+  }));
+  const hosts = externalHosts(files);
+  return { ok: hosts.length === 0, detail: hosts.join(', ') };
 });
 
 // ==========================================================================
