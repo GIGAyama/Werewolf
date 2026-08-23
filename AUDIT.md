@@ -379,3 +379,54 @@ vote / voteResult / night）を通しで操作し、全 36 通りで次を確認
 
 キーボード操作（1366×768）：`Space` → 672px、`PageDown` → 1,344px、`End` → 最下部、`Home` → 先頭。
 最下部までスクロールしてもヘッダーは `top=0` に残り、「ゲーム開始」ボタンは画面内に見えている。
+
+---
+
+# 追加修正（2026-08-23）— プライバシーポリシー / 利用規約が開けない
+
+## 何が起きていたか
+
+giga-school.com 側からプライバシーポリシーと利用規約のボタンを押すと、
+そのページではなく**人狼ゲームのアプリ画面が開いてしまう**状態だった。
+
+原因は2つ重なっていた。
+
+1. **ページが配信されていなかった。**
+   `privacy.html` と `terms.html` はリポジトリの直下に置かれていたが、
+   GitHub Pages へ上げているのは `dist/` だけ（`.github/workflows/deploy.yml` の
+   `upload-pages-artifact` の `path: ./dist`）。Vite が `dist/` へそのまま複製するのは
+   `public/` の中身だけなので、この2ファイルは配信物に**1度も入っていなかった**。
+
+2. **Service Worker が肩代わりしていた。**
+   Workbox の `navigateFallback: 'index.html'` は、画面遷移のリクエストを
+   すべてプリキャッシュ済みの `index.html` に差し替える（圏外でもアプリが
+   起動するための設定）。存在しない `/privacy.html` への遷移もこれに拾われるため、
+   404 ではなく**アプリが立ち上がる**という見え方になっていた。
+
+## どう直したか
+
+1. `privacy.html` と `terms.html` を `public/` へ移した。
+   これで `dist/privacy.html` / `dist/terms.html` として配信される。
+
+2. `vite.config.ts` の Workbox 設定に `navigateFallbackDenylist` を足し、
+   この2ページを画面遷移フォールバックの対象から外した。
+
+   ```ts
+   navigateFallback: 'index.html',
+   navigateFallbackDenylist: [/\/(privacy|terms)\.html$/],
+   ```
+
+   1 だけでは不十分である。`navigateFallback` は存在するファイルへの遷移も
+   差し替えるため、除外しないと配信物に入れても**やはりアプリが開く**。
+
+## 検証
+
+- `npm run typecheck` / `npm test`（35件）/ `npm run build` / `npm run check`（38合格・0不合格）
+- `dist/` を静的配信し、`/privacy.html` と `/terms.html` が 200 で
+  それぞれ「プライバシーポリシー｜Werewolf」「利用規約｜Werewolf」を返すことを確認
+- 生成された `dist/sw.js` に
+  `NavigationRoute(…,{denylist:[/\/(privacy|terms)\.html$/]})` が入っていることを確認
+- 配信物の合計は 573.4KB（上限 1024KB）。2ページ分（約21KB）増えたが余裕がある
+
+なお、この2ページは `globPatterns` の `**/*.html` に合致するのでプリキャッシュされる。
+オフラインでも読める。

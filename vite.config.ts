@@ -114,6 +114,10 @@ export default defineConfig({
         // 画面遷移はプリキャッシュ済みの index.html を返す。圏外でも
         // アプリがそのまま起動する（offline.html はその保険）。
         navigateFallback: 'index.html',
+        // ただし、プライバシーポリシーと利用規約はアプリではなく独立した
+        // ページである。除外しないと Service Worker が画面遷移をすべて
+        // index.html に差し替えてしまい、リンクを押してもアプリが開く。
+        navigateFallbackDenylist: [/\/(privacy|terms)\.html$/],
         // 外部への runtimeCaching は持たない。フォントを自己ホストに
         // したので、このアプリはもう外部オリジンへ一切通信しない。
       },
