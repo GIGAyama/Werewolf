@@ -279,6 +279,9 @@ function Footer() {
         <a href="https://giga-school.com" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-1">
           GIGA山
         </a>
+        <a href="https://giga-school.com/apps/werewolf/" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-2">
+          使い方を読む
+        </a>
       </small>
     </footer>
   );
