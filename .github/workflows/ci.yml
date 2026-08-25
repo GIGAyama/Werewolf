@@ -1,0 +1,65 @@
+# =====================================================================
+# ci.yml — このリポジトリの最低限の点検
+# =====================================================================
+# このリポジトリは TypeScript で書かれ、自前の品質ゲート
+# （scripts/check-project.mjs、41 項目）を**すでに持っている**。
+# ところがそれを走らせる仕組みが無く、書いたきり誰も回していなかった。
+#
+#   1. check — ビルドしてから品質ゲートを走らせる。
+#   2. drift — 配られたスキルが正本からずれていないか。
+#
+# ⚠️ **build を先に走らせること。** このゲートは dist/ の中身を見る
+#    （初回 JS の大きさ、配信物の合計、sw.js が localStorage に触れていないか、
+#    offline.html があるか、manifest とアイコン）。dist が無いと 8 項目が
+#    「dist が無い」で落ちる。2026-08-25 に実測した。
+#
+#    手元で確かめたときは前のビルドの dist が残っていて通ってしまい、
+#    まっさらな CI で初めて落ちた。**検査の条件をそろえないと、
+#    手元の緑は何の保証にもならない。**
+#
+#    build は tsc -b を含むので、型の検査もここで済む。
+#
+# ⚠️ これまで deploy.yml しか無く、それは main への push でしか動かなかった。
+#    41 項目のゲートを持ちながら、pull_request では何も見ていなかった。
+#
+# ⚠️ npm test（vitest）はここでは走らせていない。手元で確かめたのは
+#    typecheck と check の 2 つで、通ることを実測したものだけを入れてある。
+#    テストも入れるなら、先に緑であることを確かめてから足すこと。
+# =====================================================================
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # ⚠️ ゲートが dist/ を見るので、先にビルドする（tsc -b も含まれる）
+      - name: ビルド（型の検査を含む）
+        run: npm run build
+      - name: 品質ゲート
+        run: npm run check
+
+  # 配られたスキル（.claude/skills/）が正本からずれていないか。
+  # 正本は GIGAyama.github.io/standards/ にあり、そこを checkout して直に照合する。
+  # 実行時の依存は増えない（このリポジトリには何も足さない）。
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: GIGAyama/GIGAyama.github.io
+          path: .standards-src
+      - name: 正本とのずれ検知
+        run: node .standards-src/standards/check-drift.mjs --standards .standards-src/standards
