@@ -1,0 +1,54 @@
+# =====================================================================
+# ci.yml — このリポジトリの最低限の点検
+# =====================================================================
+# このリポジトリは TypeScript で書かれ、自前の品質ゲート
+# （scripts/check-project.mjs、41 項目）を**すでに持っている**。
+# ところがそれを走らせる仕組みが無く、書いたきり誰も回していなかった。
+#
+#   1. check — 型（tsc -b --noEmit）と品質ゲートを走らせる。
+#      型は build（tsc -b && vite build）でも通るが、型だけなら速い。
+#   2. drift — 配られたスキルが正本からずれていないか。
+#
+# ⚠️ これまで deploy.yml しか無く、それは main への push でしか動かなかった。
+#    41 項目のゲートを持ちながら、pull_request では何も見ていなかった。
+#
+# ⚠️ npm test（vitest）はここでは走らせていない。手元で確かめたのは
+#    typecheck と check の 2 つで、通ることを実測したものだけを入れてある。
+#    テストも入れるなら、先に緑であることを確かめてから足すこと。
+# =====================================================================
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 型の検査
+        run: npm run typecheck
+      - name: 品質ゲート
+        run: npm run check
+
+  # 配られたスキル（.claude/skills/）が正本からずれていないか。
+  # 正本は GIGAyama.github.io/standards/ にあり、そこを checkout して直に照合する。
+  # 実行時の依存は増えない（このリポジトリには何も足さない）。
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: GIGAyama/GIGAyama.github.io
+          path: .standards-src
+      - name: 正本とのずれ検知
+        run: node .standards-src/standards/check-drift.mjs --standards .standards-src/standards
