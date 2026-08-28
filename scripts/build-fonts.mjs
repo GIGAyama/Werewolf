@@ -97,6 +97,8 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 async function fetchWeight(weight) {
+  // ビルド時にここから取り寄せて自己ホストする側。配信物には外部通信が残らない
+  // （README「フォントの再生成」参照）。 giga-lint-ignore-next-line
   const url = new URL('https://fonts.googleapis.com/css2');
   url.searchParams.set('family', `${FAMILY}:wght@${weight}`);
   url.searchParams.set('text', chars);
