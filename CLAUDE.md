@@ -1,5 +1,11 @@
 # CLAUDE.md
 
+@.agents/rules/gigaschool-standards.md
+
+⚠️ **上の 1 行を消さないこと。** 艦隊共通のルール（Zero-CDN・Zero-PII・正本同期）は
+正本 `GIGAyama.github.io/standards/agents/rules/` に 1 本だけ置いてある。
+Claude Code はこの取りこみを通して読む。以下はこのリポジトリ固有の話。
+
 このファイルは、AI アシスタント（Claude Code など）がこのリポジトリで作業するときの手引きです。
 人間向けの説明は [README.md](./README.md)（開発者向け）と [MANUAL.md](./MANUAL.md)（先生向け）にあります。
 
