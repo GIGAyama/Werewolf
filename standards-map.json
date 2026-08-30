@@ -51,6 +51,10 @@
   ],
   "files": [
     {
+      "canonical": "web/giga-app-links.js",
+      "local": "public/giga-app-links.js"
+    },
+    {
       "canonical": "agents/rules/gigaschool-standards.md",
       "local": ".agents/rules/gigaschool-standards.md"
     },

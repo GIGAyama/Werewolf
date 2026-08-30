@@ -273,15 +273,24 @@ function Header({
 function Footer() {
   return (
     // text-white/50 では背景に対して約 3.9:1 でコントラスト不足だったため /75 に上げた
-    <footer className="safe-bottom text-center text-white/75 py-4 border-t border-white/10 bg-gray-900/80 backdrop-blur-md shrink-0 relative z-10">
-      <small className="text-sm font-bold flex items-center justify-center gap-1 tracking-wider">
-        © 2026 人狼ゲーム
-        <a href="https://giga-school.com" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-1">
-          GIGA山
-        </a>
-        <a href="https://giga-school.com/apps/werewolf/" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-2">
-          使い方を読む
-        </a>
+    //
+    // フッターは 1 行に収める。2 行になると、そのぶん遊ぶ場所を奪う。
+    // 幅が足りなくなったら切るのはクレジットのほうで、利用規約とプライバシーへの
+    // 行き先は必ず残す。画面からそこへ辿れるのは、ここだけしかない。
+    // ⚠️ min-w-0 を落とさないこと。行き先は折り返さないので、これが無いと
+    //    最小幅が段を押し広げ、狭い画面で横に溢れる。
+    <footer className="safe-bottom text-center text-white/75 py-1 border-t border-white/10 bg-gray-900/80 backdrop-blur-md shrink-0 relative z-10">
+      <small className="text-sm font-bold flex flex-nowrap items-center justify-center gap-1 min-w-0 tracking-wider">
+        <span className="min-w-0 truncate">
+          © 2026 人狼ゲーム
+          <a href="https://giga-school.com" target="_blank" rel="noopener noreferrer" className="no-underline text-white hover:text-yellow-300 underline-offset-4 hover:underline transition-colors ml-1">
+            GIGA山
+          </a>
+        </span>
+        {/* ⚠️ data-theme="dark" を外さないこと。このアプリの地は gray-900 で、
+               端末の設定が light だと部品は暗い字を選び、暗い地に暗い字が載る。
+               部品は Shadow DOM なので、こちらの CSS では直せない。 */}
+        <span data-giga-links data-links="terms,privacy" data-theme="dark" />
       </small>
     </footer>
   );
